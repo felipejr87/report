@@ -12,6 +12,9 @@ const VAZIO = {
   proximo_passo: '',
   responsavel: '',
   estimativa: '',
+  link_jira: '',
+  data_inicio: '',
+  data_fim: '',
 }
 
 export default function FormDemanda({ inicial, onSalvar, onCancelar }) {
@@ -37,6 +40,9 @@ export default function FormDemanda({ inicial, onSalvar, onCancelar }) {
       await onSalvar({
         ...dados,
         estimativa: dados.estimativa === '' ? null : Number(dados.estimativa),
+        link_jira: dados.link_jira === '' ? null : dados.link_jira,
+        data_inicio: dados.data_inicio === '' ? null : dados.data_inicio,
+        data_fim: dados.data_fim === '' ? null : dados.data_fim,
       })
     } catch (err) {
       setErro(err.message || 'Erro ao salvar.')
@@ -96,6 +102,21 @@ export default function FormDemanda({ inicial, onSalvar, onCancelar }) {
       <label>
         Estimativa
         <input type="number" value={dados.estimativa} onChange={(e) => atualizar('estimativa', e.target.value)} />
+      </label>
+
+      <label>
+        Link do Jira
+        <input type="url" value={dados.link_jira} onChange={(e) => atualizar('link_jira', e.target.value)} placeholder="https://...atlassian.net/browse/..." />
+      </label>
+
+      <label>
+        Data de início
+        <input type="date" value={dados.data_inicio} onChange={(e) => atualizar('data_inicio', e.target.value)} />
+      </label>
+
+      <label>
+        Data fim
+        <input type="date" value={dados.data_fim} onChange={(e) => atualizar('data_fim', e.target.value)} />
       </label>
 
       <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>

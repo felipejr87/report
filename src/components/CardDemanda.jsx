@@ -16,7 +16,20 @@ export default function CardDemanda({ demanda, onEditar, onMudarFase }) {
         <h3 style={{ fontSize: 'var(--text-lg)', cursor: 'pointer' }} onClick={() => onEditar(demanda)}>
           {demanda.nome}
         </h3>
-        <BadgeParado atualizadoEm={demanda.atualizado_em} />
+        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexShrink: 0 }}>
+          {demanda.link_jira && (
+            <a
+              href={demanda.link_jira}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{ fontSize: 'var(--text-xs)', color: 'var(--brand)' }}
+            >
+              Jira ↗
+            </a>
+          )}
+          <BadgeParado atualizadoEm={demanda.atualizado_em} />
+        </div>
       </div>
 
       <p style={{ color: 'var(--text-dim)', fontSize: 'var(--text-sm)', marginTop: 'var(--space-2)' }}>
