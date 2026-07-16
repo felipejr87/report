@@ -1,0 +1,152 @@
+/* =============================================
+   REPORT — Design System
+   Dark-first. Dados sempre em mono.
+   ============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Fundos */
+  --bg:         #0C0E14;
+  --surface:    #141824;
+  --surface-hi: #1B2132;
+  --line:       #262D40;
+
+  /* Texto */
+  --text:       #E9E6DC;
+  --text-dim:   #8B90A0;
+
+  /* Marca */
+  --brand:      #E8A33D;
+  --brand-ink:  #12100A;
+
+  /* Fases */
+  --discovery:    #8B7BD8;
+  --refinamento:  #5BA8C4;
+  --downstream:   #E8A33D;
+  --entregue:     #57B980;
+  --danger:       #D96A5B;
+
+  /* Tipografia */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body:    'Inter', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  /* Escala */
+  --text-xs:  0.75rem;
+  --text-sm:  0.875rem;
+  --text-base: 1rem;
+  --text-lg:  1.125rem;
+  --text-xl:  1.25rem;
+  --text-2xl: 1.5rem;
+
+  /* Espaçamento */
+  --space-1: 4px;   --space-2: 8px;   --space-3: 12px;
+  --space-4: 16px;  --space-6: 24px;  --space-8: 32px;
+
+  /* Geometria */
+  --radius-sm: 6px;
+  --radius:    10px;
+  --radius-lg: 16px;
+
+  /* Sombras */
+  --shadow-card: 0 2px 12px rgba(0,0,0,0.4);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+input, select, textarea {
+  background: var(--surface-hi);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.btn-primary {
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+
+.btn-secondary {
+  background: var(--surface-hi);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+/* Assinatura visual: trilho de fase */
+.card-demanda {
+  border-left: 6px solid var(--fase-cor, var(--line));
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-card);
+}
+.card-demanda[data-fase="discovery"]   { --fase-cor: var(--discovery);   }
+.card-demanda[data-fase="refinamento"] { --fase-cor: var(--refinamento);  }
+.card-demanda[data-fase="downstream"]  { --fase-cor: var(--downstream);   }
+.card-demanda[data-fase="entregue"]    { --fase-cor: var(--entregue);     }
+
+/* Chip de código de espaço */
+.chip-codigo {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--brand-ink);
+  background: var(--brand);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+/* Badge sem movimento */
+.badge-parado {
+  font-size: var(--text-xs);
+  color: var(--danger);
+  background: rgba(217, 106, 91, 0.12);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Focus visível em tudo */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Reduzir movimento */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
