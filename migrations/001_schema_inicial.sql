@@ -5,7 +5,7 @@
 -- ESPAÇOS: unidade de acesso. Código público + senha (hash).
 create table espacos (
   id        uuid primary key default gen_random_uuid(),
-  codigo    text unique not null,   -- ex: CLARO-AI (uppercase, 4-20 chars)
+  codigo    text unique not null,   -- ex: EQUIPE-X (uppercase, 4-20 chars)
   nome      text not null,
   senha_hash text not null,         -- bcrypt, NUNCA texto puro
   criado_em timestamptz default now()

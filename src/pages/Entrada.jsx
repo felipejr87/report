@@ -104,7 +104,7 @@ export default function Entrada() {
         <form onSubmit={handleEntrar} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <label>
             Código do espaço
-            <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="CLARO-AI" required />
+            <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="EQUIPE-X" required />
           </label>
           <label>
             Senha
@@ -118,11 +118,11 @@ export default function Entrada() {
         <form onSubmit={handleCriar} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <label>
             Código do espaço
-            <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="CLARO-AI" required />
+            <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="EQUIPE-X" required />
           </label>
           <label>
             Nome do espaço
-            <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Squad Claro AI" required />
+            <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Squad de Produto" required />
           </label>
           <label>
             Senha (mín. 8 caracteres)
