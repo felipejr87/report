@@ -3,9 +3,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import bcrypt from 'npm:bcryptjs'
 import { create } from 'https://deno.land/x/djwt@v3.0.1/mod.ts'
 
-// Rate limit simples em memória (por IP, 5 tentativas/min)
-const tentativas = new Map<string, { count: number; reset: number }>()
-
 serve(async (req) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -17,19 +14,35 @@ serve(async (req) => {
   }
 
   try {
-    // Rate limit por IP
-    const ip = req.headers.get('x-forwarded-for') || 'unknown'
-    const agora = Date.now()
-    const entry = tentativas.get(ip) || { count: 0, reset: agora + 60_000 }
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
 
-    if (agora > entry.reset) {
-      entry.count = 0
-      entry.reset = agora + 60_000
+    // Rate limit por IP, persistido no banco (o Map em memória não sobrevive
+    // entre invocações da Edge Function).
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    const agora = new Date()
+
+    const { data: limite } = await supabase
+      .from('login_rate_limit')
+      .select('contagem, reset_em')
+      .eq('ip', ip)
+      .maybeSingle()
+
+    let contagem = 1
+    let resetEm = new Date(agora.getTime() + 60_000)
+
+    if (limite && new Date(limite.reset_em) > agora) {
+      contagem = limite.contagem + 1
+      resetEm = new Date(limite.reset_em)
     }
-    entry.count++
-    tentativas.set(ip, entry)
 
-    if (entry.count > 5) {
+    await supabase
+      .from('login_rate_limit')
+      .upsert({ ip, contagem, reset_em: resetEm.toISOString() })
+
+    if (contagem > 5) {
       return new Response(
         JSON.stringify({ ok: false, erro: 'Muitas tentativas. Aguarde 1 minuto.' }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -46,11 +59,6 @@ serve(async (req) => {
     }
 
     // Buscar espaço pelo código (service role — bypass RLS)
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
-
     const { data: espaco, error } = await supabase
       .from('espacos')
       .select('id, nome, senha_hash')
@@ -75,9 +83,22 @@ serve(async (req) => {
       )
     }
 
-    // Gerar JWT customizado assinado com SUPABASE_JWT_SECRET
-    // CRÍTICO: usar exatamente esta chave — é a única que o RLS do Supabase aceita
-    const jwtSecret = Deno.env.get('SUPABASE_JWT_SECRET')!
+    // Gerar JWT customizado assinado com o JWT secret oficial do projeto.
+    // Projetos novos não injetam SUPABASE_JWT_SECRET automaticamente nas Edge
+    // Functions (nomes com prefixo SUPABASE_ são reservados e não podem ser
+    // definidos manualmente) — por isso lemos também de JWT_SIGNING_SECRET,
+    // que deve ser configurado como secret da função no dashboard com o valor
+    // de Project Settings → API → JWT Settings → Legacy JWT Secret.
+    // CRÍTICO: usar exatamente esse valor — é a única chave que o RLS do Supabase aceita.
+    const jwtSecret = Deno.env.get('SUPABASE_JWT_SECRET') || Deno.env.get('JWT_SIGNING_SECRET')
+    if (!jwtSecret) {
+      console.error('[entrar-espaco] JWT signing secret não configurado (SUPABASE_JWT_SECRET / JWT_SIGNING_SECRET ausentes)')
+      return new Response(
+        JSON.stringify({ ok: false, erro: 'Erro interno.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const key = await crypto.subtle.importKey(
       'raw',
       new TextEncoder().encode(jwtSecret),

@@ -55,9 +55,19 @@ npx supabase functions deploy entrar-espaco --project-ref <REF_DO_PROJETO>
 npx supabase functions deploy criar-espaco  --project-ref <REF_DO_PROJETO>
 ```
 
-As Edge Functions usam as variáveis de ambiente automáticas do Supabase
-(`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`) — não é preciso
-configurar nada manualmente para elas.
+`SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` são injetadas automaticamente. **`SUPABASE_JWT_SECRET`
+não é** em projetos novos (o nome é reservado, então não dá pra defini-lo manualmente com esse
+nome). É preciso configurar um secret próprio chamado `JWT_SIGNING_SECRET` com o valor de
+**Project Settings → API → JWT Settings → Legacy JWT Secret**:
+
+```bash
+npx supabase secrets set JWT_SIGNING_SECRET=<valor_do_legacy_jwt_secret> --project-ref <REF_DO_PROJETO>
+```
+
+Ou pelo dashboard: Edge Functions → Secrets → adicionar `JWT_SIGNING_SECRET`. Sem isso,
+`entrar-espaco` responde 500 no login (a função tenta `SUPABASE_JWT_SECRET` primeiro, cai para
+`JWT_SIGNING_SECRET`, e retorna erro genérico se nenhum dos dois existir — nunca falha
+silenciosamente com uma chave vazia).
 
 ### 5. Rodar
 
