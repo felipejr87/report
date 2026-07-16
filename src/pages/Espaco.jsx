@@ -2,13 +2,18 @@ import { useEffect, useState, useCallback } from 'react'
 import { Navigate } from 'react-router-dom'
 import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { useToast } from '../hooks/useToast'
+import Header from '../components/Header'
+import FiltroFase from '../components/FiltroFase'
 import CardDemanda from '../components/CardDemanda'
 import FormDemanda from '../components/FormDemanda'
-
-const FASES = ['todas', 'discovery', 'refinamento', 'downstream', 'entregue']
+import Modal from '../components/Modal'
+import EstadoVazio from '../components/EstadoVazio'
+import { ROTULO_FASE } from '../components/ChipFase'
 
 export default function Espaco() {
   const { sessao, sair } = useAuth()
+  const toast = useToast()
   const [demandas, setDemandas] = useState([])
   const [filtro, setFiltro] = useState('todas')
   const [carregando, setCarregando] = useState(true)
@@ -61,7 +66,6 @@ export default function Espaco() {
 
   async function salvar(dados) {
     if (editando && editando.id) {
-      // edição
       const { error } = await cliente
         .from('demandas')
         .update({ ...dados, atualizado_em: new Date().toISOString() })
@@ -73,8 +77,8 @@ export default function Espaco() {
         tipo: 'edicao',
         detalhe: dados,
       })
+      toast?.sucesso('Demanda atualizada.')
     } else {
-      // criação
       const { data, error } = await cliente
         .from('demandas')
         .insert({ ...dados, espaco_id: sessao.espaco.id })
@@ -87,8 +91,17 @@ export default function Espaco() {
         tipo: 'criacao',
         detalhe: dados,
       })
+      toast?.sucesso('Demanda criada.')
     }
 
+    fecharForm()
+    await carregar()
+  }
+
+  async function excluir() {
+    const { error } = await cliente.from('demandas').delete().eq('id', editando.id)
+    if (error) throw error
+    toast?.sucesso('Demanda excluída.')
     fecharForm()
     await carregar()
   }
@@ -100,7 +113,7 @@ export default function Espaco() {
       .from('demandas')
       .update({ fase: novaFase, atualizado_em: new Date().toISOString() })
       .eq('id', demanda.id)
-    if (error) { setErro(error.message); return }
+    if (error) { toast?.erro(error.message); return }
 
     await cliente.from('movimentos').insert({
       demanda_id: demanda.id,
@@ -108,52 +121,45 @@ export default function Espaco() {
       detalhe: { de: demanda.fase, para: novaFase },
     })
 
+    toast?.sucesso(`Movido para ${ROTULO_FASE[novaFase]}.`)
     await carregar()
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-4)' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <span className="chip-codigo">{sessao.espaco.codigo}</span>
-          <span style={{ color: 'var(--text-dim)', fontSize: 'var(--text-sm)' }}>{sessao.espaco.nome}</span>
-        </div>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <button className="btn-primary" onClick={abrirNova}>Nova demanda</button>
-          <button className="btn-secondary" onClick={sair}>Sair</button>
-        </div>
-      </header>
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+      <Header espaco={sessao.espaco} onNova={abrirNova} onSair={sair} />
 
-      <nav style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
-        {FASES.map((f) => (
-          <button
-            key={f}
-            className={filtro === f ? 'btn-primary' : 'btn-secondary'}
-            onClick={() => setFiltro(f)}
-          >
-            {f}
-          </button>
-        ))}
-      </nav>
+      <div className="layout-espaco">
+        <div className="sidebar-filtros">
+          <FiltroFase demandas={demandas} filtro={filtro} onFiltroChange={setFiltro} />
+        </div>
 
-      {erro && <p style={{ color: 'var(--danger)', marginBottom: 'var(--space-3)' }}>{erro}</p>}
+        <div className="conteudo-principal">
+          {erro && <p role="alert" className="campo-erro" style={{ marginBottom: 'var(--space-md)' }}>{erro}</p>}
+
+          {carregando ? (
+            <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
+          ) : demandasFiltradas.length === 0 ? (
+            <EstadoVazio onCriar={abrirNova} />
+          ) : (
+            <div className="lista-demandas">
+              {demandasFiltradas.map((d) => (
+                <CardDemanda key={d.id} demanda={d} onEditar={abrirEdicao} onMudarFase={mudarFase} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       {mostrarForm && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--radius)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
-          <FormDemanda inicial={editando?.id ? editando : null} onSalvar={salvar} onCancelar={fecharForm} />
-        </div>
-      )}
-
-      {carregando ? (
-        <p style={{ color: 'var(--text-dim)' }}>Carregando...</p>
-      ) : demandasFiltradas.length === 0 ? (
-        <p style={{ color: 'var(--text-dim)' }}>Nenhuma demanda nesta fase.</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          {demandasFiltradas.map((d) => (
-            <CardDemanda key={d.id} demanda={d} onEditar={abrirEdicao} onMudarFase={mudarFase} />
-          ))}
-        </div>
+        <Modal titulo={editando?.id ? 'Editar demanda' : 'Nova demanda'} onFechar={fecharForm}>
+          <FormDemanda
+            inicial={editando?.id ? editando : null}
+            onSalvar={salvar}
+            onExcluir={editando?.id ? excluir : undefined}
+            onCancelar={fecharForm}
+          />
+        </Modal>
       )}
     </div>
   )
