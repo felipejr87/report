@@ -20,6 +20,7 @@ export default function Espaco() {
   const [erro, setErro] = useState('')
   const [editando, setEditando] = useState(null) // demanda em edição, ou {} para nova, ou null
   const [mostrarForm, setMostrarForm] = useState(false)
+  const [historico, setHistorico] = useState(null)
 
   const cliente = sessao ? supabaseEspaco(sessao.token) : null
 
@@ -54,14 +55,24 @@ export default function Espaco() {
     setMostrarForm(true)
   }
 
-  function abrirEdicao(demanda) {
+  async function abrirEdicao(demanda) {
     setEditando(demanda)
     setMostrarForm(true)
+    setHistorico(null)
+
+    const { data, error } = await cliente
+      .from('movimentos')
+      .select('id, tipo, detalhe, criado_em')
+      .eq('demanda_id', demanda.id)
+      .order('criado_em', { ascending: false })
+
+    if (!error) setHistorico(data)
   }
 
   function fecharForm() {
     setMostrarForm(false)
     setEditando(null)
+    setHistorico(null)
   }
 
   async function salvar(dados) {
@@ -155,6 +166,7 @@ export default function Espaco() {
         <Modal titulo={editando?.id ? 'Editar demanda' : 'Nova demanda'} onFechar={fecharForm}>
           <FormDemanda
             inicial={editando?.id ? editando : null}
+            historico={historico}
             onSalvar={salvar}
             onExcluir={editando?.id ? excluir : undefined}
             onCancelar={fecharForm}

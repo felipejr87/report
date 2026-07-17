@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Trash2, X } from 'lucide-react'
 import { FASES, ROTULO_FASE } from './ChipFase'
+import HistoricoDemanda from './HistoricoDemanda'
 
 const PONTOS = ['1', '2', '3', '5', '8', '13', '21', '?']
 
@@ -19,7 +20,7 @@ const VAZIO = {
   data_fim: '',
 }
 
-export default function FormDemanda({ inicial, onSalvar, onExcluir, onCancelar }) {
+export default function FormDemanda({ inicial, historico, onSalvar, onExcluir, onCancelar }) {
   const [dados, setDados] = useState(inicial ? { ...VAZIO, ...inicial } : VAZIO)
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -158,6 +159,17 @@ export default function FormDemanda({ inicial, onSalvar, onExcluir, onCancelar }
         <span className="text-label">Link do Jira</span>
         <input type="url" value={dados.link_jira} onChange={(e) => atualizar('link_jira', e.target.value)} placeholder="https://...atlassian.net/browse/..." />
       </label>
+
+      {inicial?.id && (
+        <details>
+          <summary className="text-label" style={{ cursor: 'pointer' }}>
+            Histórico {historico ? `(${historico.length})` : ''}
+          </summary>
+          <div style={{ marginTop: 'var(--space-sm)' }}>
+            <HistoricoDemanda movimentos={historico} />
+          </div>
+        </details>
+      )}
 
       <div className="modal-rodape">
         {inicial?.id ? (
