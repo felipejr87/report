@@ -15,7 +15,7 @@ export default function Espaco() {
   const navigate = useNavigate()
 
   const [projetos, setProjetos] = useState([])
-  const [demandas, setDemandas] = useState([])
+  const [atividades, setAtividades] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [mostrarNovo, setMostrarNovo] = useState(false)
@@ -27,16 +27,16 @@ export default function Espaco() {
     setCarregando(true)
     setErro('')
 
-    const [{ data: p, error: eP }, { data: d, error: eD }] = await Promise.all([
+    const [{ data: p, error: eP }, { data: a, error: eA }] = await Promise.all([
       cliente.from('projetos').select('*'),
-      cliente.from('demandas').select('id, projeto_id, fase, atualizado_em'),
+      cliente.from('atividades').select('id, projeto_id, fase, atualizado_em'),
     ])
 
-    if (eP || eD) {
-      setErro((eP || eD).message)
+    if (eP || eA) {
+      setErro((eP || eA).message)
     } else {
       setProjetos(p || [])
-      setDemandas(d || [])
+      setAtividades(a || [])
     }
     setCarregando(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,29 +82,29 @@ export default function Espaco() {
         ) : projetosOrdenados.length === 0 ? (
           <p className="text-micro">Nenhum projeto ainda. Crie o primeiro pra começar.</p>
         ) : (
-          <div className="lista-demandas">
+          <div className="lista">
             {projetosOrdenados.map((p) => {
-              const demandasDoProjeto = demandas.filter((d) => d.projeto_id === p.id)
-              const tracao = precisaDeTracao(p, demandasDoProjeto)
-              const total = demandasDoProjeto.length
-              const entregues = demandasDoProjeto.filter((d) => d.fase === 'entregue').length
+              const atividadesDoProjeto = atividades.filter((a) => a.projeto_id === p.id)
+              const tracao = precisaDeTracao(p, atividadesDoProjeto)
+              const total = atividadesDoProjeto.length
+              const entregues = atividadesDoProjeto.filter((a) => a.fase === 'entregue').length
 
               return (
                 <div
                   key={p.id}
-                  className="item-demanda"
+                  className="item-atividade"
                   onClick={() => navigate(`/espaco/projeto/${p.id}`)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/espaco/projeto/${p.id}`) } }}
                   aria-label={`Abrir projeto ${p.nome}`}
                 >
-                  <div className="item-demanda-titulo" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div className="item-atividade-titulo" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {p.quente && <Flame size={14} color="var(--atencao)" aria-label="Quente" />}
                     {p.nome}
                   </div>
-                  <div className="item-demanda-meta">
-                    <span>{total === 0 ? 'sem demandas' : `${entregues}/${total} concluídas`}</span>
+                  <div className="item-atividade-meta">
+                    <span>{total === 0 ? 'sem atividades' : `${entregues}/${total} concluídas`}</span>
                     {p.data_entrega && (
                       <>
                         <span className="separador-ponto">·</span>

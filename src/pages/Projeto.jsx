@@ -6,9 +6,9 @@ import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { useUsuario } from '../hooks/useUsuario'
 import { buscarProximosPassosPendentes, concluirAcao } from '../lib/timeline'
-import { ordenarDemandasPorPrioridade } from '../lib/projeto'
-import CardDemanda from '../components/CardDemanda'
-import FormDemanda from '../components/FormDemanda'
+import { ordenarAtividadesPorPrioridade } from '../lib/projeto'
+import CardAtividade from '../components/CardAtividade'
+import FormAtividade from '../components/FormAtividade'
 import FormProjeto from '../components/FormProjeto'
 import Modal from '../components/Modal'
 import EstadoVazio from '../components/EstadoVazio'
@@ -21,7 +21,7 @@ export default function Projeto() {
   const { usuario } = useUsuario()
 
   const [projeto, setProjeto] = useState(null)
-  const [demandas, setDemandas] = useState([])
+  const [atividades, setAtividades] = useState([])
   const [proximosPassos, setProximosPassos] = useState({})
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
@@ -35,22 +35,22 @@ export default function Projeto() {
     setCarregando(true)
     setErro('')
 
-    const [{ data: p, error: eP }, { data: d, error: eD }] = await Promise.all([
+    const [{ data: p, error: eP }, { data: a, error: eA }] = await Promise.all([
       cliente.from('projetos').select('*').eq('id', id).single(),
-      cliente.from('demandas').select('*').eq('projeto_id', id).order('atualizado_em', { ascending: false }),
+      cliente.from('atividades').select('*').eq('projeto_id', id).order('atualizado_em', { ascending: false }),
     ])
 
-    if (eP || eD) {
-      setErro((eP || eD).message)
+    if (eP || eA) {
+      setErro((eP || eA).message)
       setCarregando(false)
       return
     }
 
     setProjeto(p)
-    setDemandas(d || [])
+    setAtividades(a || [])
 
-    if (d?.length) {
-      const mapa = await buscarProximosPassosPendentes(cliente, d.map((x) => x.id))
+    if (a?.length) {
+      const mapa = await buscarProximosPassosPendentes(cliente, a.map((x) => x.id))
       setProximosPassos(mapa)
     } else {
       setProximosPassos({})
@@ -63,21 +63,21 @@ export default function Projeto() {
 
   if (!sessao) return <Navigate to="/" replace />
 
-  async function criarDemanda(dados) {
+  async function criarAtividade(dados) {
     const { data, error } = await cliente
-      .from('demandas')
+      .from('atividades')
       .insert({ ...dados, espaco_id: sessao.espaco.id, projeto_id: id })
       .select()
       .single()
     if (error) throw error
 
     await cliente.from('movimentos').insert({
-      demanda_id: data.id,
+      atividade_id: data.id,
       tipo: 'criacao',
-      detalhe: { texto: 'Demanda criada', usuario: usuario || null },
+      detalhe: { texto: 'Atividade criada', usuario: usuario || null },
     })
 
-    toast?.sucesso('Demanda criada.')
+    toast?.sucesso('Atividade criada.')
     setMostrarNova(false)
     await carregar()
   }
@@ -90,9 +90,9 @@ export default function Projeto() {
     await carregar()
   }
 
-  async function concluirPasso(movimento, demandaId) {
+  async function concluirPasso(movimento, atividadeId) {
     try {
-      await concluirAcao(cliente, movimento.id, demandaId, usuario)
+      await concluirAcao(cliente, movimento.id, atividadeId, usuario)
       toast?.sucesso('Passo concluído.')
       await carregar()
     } catch (err) {
@@ -104,7 +104,7 @@ export default function Projeto() {
   if (erro) return <p role="alert" className="campo-erro" style={{ padding: 'var(--space-lg)' }}>{erro}</p>
   if (!projeto) return null
 
-  const demandasOrdenadas = ordenarDemandasPorPrioridade(demandas)
+  const atividadesOrdenadas = ordenarAtividadesPorPrioridade(atividades)
 
   return (
     <div className="detalhe-pagina" style={{ maxWidth: 760 }}>
@@ -129,33 +129,44 @@ export default function Projeto() {
         </div>
       </div>
 
+      {(projeto.objetivo || projeto.okr || projeto.ganho) && (
+        <section className="detalhe-secao">
+          <h2 className="section-label">Sobre o épico</h2>
+          {projeto.objetivo && <p className="text-body">{projeto.objetivo}</p>}
+          <div className="detalhe-meta-grade">
+            {projeto.okr && <span><span className="meta-label">OKR</span> {projeto.okr}</span>}
+            {projeto.ganho && <span><span className="meta-label">Ganho</span> {projeto.ganho}</span>}
+          </div>
+        </section>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button type="button" className="btn-primario" onClick={() => setMostrarNova(true)}>
           <Plus size={16} style={{ marginRight: 4, verticalAlign: -3 }} />
-          Nova demanda
+          Nova atividade
         </button>
       </div>
 
       {erro && <p role="alert" className="campo-erro">{erro}</p>}
 
-      {demandasOrdenadas.length === 0 ? (
+      {atividadesOrdenadas.length === 0 ? (
         <EstadoVazio onCriar={() => setMostrarNova(true)} />
       ) : (
-        <div className="lista-demandas">
-          {demandasOrdenadas.map((d) => (
-            <CardDemanda
-              key={d.id}
-              demanda={{ ...d, proximoPasso: proximosPassos[d.id] }}
+        <div className="lista">
+          {atividadesOrdenadas.map((a) => (
+            <CardAtividade
+              key={a.id}
+              atividade={{ ...a, proximoPasso: proximosPassos[a.id] }}
               onConcluirPasso={concluirPasso}
-              onClick={() => navigate(`/espaco/demanda/${d.id}`)}
+              onClick={() => navigate(`/espaco/atividade/${a.id}`)}
             />
           ))}
         </div>
       )}
 
       {mostrarNova && (
-        <Modal titulo="Nova demanda" onFechar={() => setMostrarNova(false)}>
-          <FormDemanda outrasDemandas={demandas} onSalvar={criarDemanda} onCancelar={() => setMostrarNova(false)} />
+        <Modal titulo="Nova atividade" onFechar={() => setMostrarNova(false)}>
+          <FormAtividade outrasAtividades={atividades} onSalvar={criarAtividade} onCancelar={() => setMostrarNova(false)} />
         </Modal>
       )}
 

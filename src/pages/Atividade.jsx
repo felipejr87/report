@@ -8,11 +8,11 @@ import { useUsuario } from '../hooks/useUsuario'
 import { concluirAcao, adicionarAcao, editarAcao, gerarReportTexto } from '../lib/timeline'
 import ChipFase, { ROTULO_FASE } from '../components/ChipFase'
 import Modal from '../components/Modal'
-import FormDemanda from '../components/FormDemanda'
+import FormAtividade from '../components/FormAtividade'
 
 const ROTULO_TIPO_MOVIMENTO = {
-  criacao: 'Demanda criada',
-  edicao: 'Demanda editada',
+  criacao: 'Atividade criada',
+  edicao: 'Atividade editada',
 }
 
 function descricaoMovimento(m) {
@@ -29,17 +29,17 @@ function usuarioDoMovimento(m) {
   return m.detalhe?.usuario || m.detalhe?.criado_por || m.detalhe?.concluido_por || m.detalhe?.editado_por
 }
 
-export default function Demanda() {
+export default function Atividade() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { sessao } = useAuth()
   const toast = useToast()
   const { usuario } = useUsuario()
 
-  const [demanda, setDemanda] = useState(null)
+  const [atividade, setAtividade] = useState(null)
   const [projeto, setProjeto] = useState(null)
   const [movimentos, setMovimentos] = useState([])
-  const [outrasDemandas, setOutrasDemandas] = useState([])
+  const [outrasAtividades, setOutrasAtividades] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [novoPasso, setNovoPasso] = useState('')
@@ -57,24 +57,24 @@ export default function Demanda() {
     setCarregando(true)
     setErro('')
 
-    const [{ data: d, error: eD }, { data: m, error: eM }, { data: outras, error: eO }] = await Promise.all([
-      cliente.from('demandas').select('*').eq('id', id).single(),
-      cliente.from('movimentos').select('*').eq('demanda_id', id).order('criado_em', { ascending: false }),
-      cliente.from('demandas').select('id, nome, predecessora_id'),
+    const [{ data: a, error: eA }, { data: m, error: eM }, { data: outras, error: eO }] = await Promise.all([
+      cliente.from('atividades').select('*').eq('id', id).single(),
+      cliente.from('movimentos').select('*').eq('atividade_id', id).order('criado_em', { ascending: false }),
+      cliente.from('atividades').select('id, nome, predecessora_id'),
     ])
 
-    if (eD || eM || eO) {
-      setErro((eD || eM || eO).message)
+    if (eA || eM || eO) {
+      setErro((eA || eM || eO).message)
       setCarregando(false)
       return
     }
 
-    setDemanda(d)
+    setAtividade(a)
     setMovimentos(m || [])
-    setOutrasDemandas((outras || []).filter((o) => o.id !== id))
+    setOutrasAtividades((outras || []).filter((o) => o.id !== id))
 
-    if (d.projeto_id) {
-      const { data: p } = await cliente.from('projetos').select('id, nome').eq('id', d.projeto_id).single()
+    if (a.projeto_id) {
+      const { data: p } = await cliente.from('projetos').select('id, nome, okr, ganho').eq('id', a.projeto_id).single()
       setProjeto(p)
     } else {
       setProjeto(null)
@@ -87,8 +87,8 @@ export default function Demanda() {
 
   if (!sessao) return <Navigate to="/" replace />
 
-  const predecessora = outrasDemandas.find((o) => o.id === demanda?.predecessora_id)
-  const sucessoras = outrasDemandas.filter((o) => o.predecessora_id === id)
+  const predecessora = outrasAtividades.find((o) => o.id === atividade?.predecessora_id)
+  const sucessoras = outrasAtividades.filter((o) => o.predecessora_id === id)
 
   const proximoPasso = movimentos.find((m) => m.tipo === 'acao_planejada' && m.status === 'pendente')
   const feitos = movimentos
@@ -139,49 +139,49 @@ export default function Demanda() {
     }
   }
 
-  async function handleConcluirDemanda() {
+  async function handleConcluirAtividade() {
     const { error } = await cliente
-      .from('demandas')
+      .from('atividades')
       .update({ fase: 'entregue', atualizado_em: new Date().toISOString() })
       .eq('id', id)
     if (error) { toast?.erro(error.message); return }
 
     await cliente.from('movimentos').insert({
-      demanda_id: id,
+      atividade_id: id,
       tipo: 'fase',
-      detalhe: { de: demanda.fase, para: 'entregue', usuario: usuario || null },
+      detalhe: { de: atividade.fase, para: 'entregue', usuario: usuario || null },
     })
 
-    toast?.sucesso('Demanda concluída.')
+    toast?.sucesso('Atividade concluída.')
     await carregar()
   }
 
   async function handleSalvarEdicao(dados) {
     const { error } = await cliente
-      .from('demandas')
+      .from('atividades')
       .update({ ...dados, atualizado_em: new Date().toISOString() })
       .eq('id', id)
     if (error) throw error
 
     await cliente.from('movimentos').insert({
-      demanda_id: id,
+      atividade_id: id,
       tipo: 'edicao',
-      detalhe: { texto: 'Demanda editada', usuario: usuario || null },
+      detalhe: { texto: 'Atividade editada', usuario: usuario || null },
     })
-    toast?.sucesso('Demanda atualizada.')
+    toast?.sucesso('Atividade atualizada.')
     setMostrarEditar(false)
     await carregar()
   }
 
   async function handleExcluir() {
-    const { error } = await cliente.from('demandas').delete().eq('id', id)
+    const { error } = await cliente.from('atividades').delete().eq('id', id)
     if (error) throw error
-    toast?.sucesso('Demanda excluída.')
-    navigate(demanda.projeto_id ? `/espaco/projeto/${demanda.projeto_id}` : '/espaco')
+    toast?.sucesso('Atividade excluída.')
+    navigate(atividade.projeto_id ? `/espaco/projeto/${atividade.projeto_id}` : '/espaco')
   }
 
   async function handleCopiarReport() {
-    const texto = gerarReportTexto(demanda, movimentos)
+    const texto = gerarReportTexto(atividade, movimentos, projeto)
     await navigator.clipboard.writeText(texto)
     setCopiado(true)
     toast?.sucesso('Report copiado.')
@@ -190,12 +190,12 @@ export default function Demanda() {
 
   if (carregando) return <p className="text-body" style={{ padding: 'var(--space-lg)' }}>Carregando...</p>
   if (erro) return <p role="alert" className="campo-erro" style={{ padding: 'var(--space-lg)' }}>{erro}</p>
-  if (!demanda) return null
+  if (!atividade) return null
 
   return (
     <div className="detalhe-pagina">
       <header className="detalhe-header">
-        <Link to={demanda.projeto_id ? `/espaco/projeto/${demanda.projeto_id}` : '/espaco'} className="link-voltar">
+        <Link to={atividade.projeto_id ? `/espaco/projeto/${atividade.projeto_id}` : '/espaco'} className="link-voltar">
           <ArrowLeft size={16} />
           Voltar
         </Link>
@@ -206,26 +206,24 @@ export default function Demanda() {
       </header>
 
       <div className="detalhe-titulo-area">
-        <ChipFase fase={demanda.fase} />
+        <ChipFase fase={atividade.fase} />
         {projeto && <Link to={`/espaco/projeto/${projeto.id}`} className="text-micro">{projeto.nome}</Link>}
-        <h1 className="text-hero">{demanda.nome}</h1>
+        <h1 className="text-hero">{atividade.nome}</h1>
         <button type="button" className="link-acao" onClick={() => setMostrarEditar(true)}>Editar</button>
       </div>
 
       <section className="detalhe-secao">
         <h2 className="section-label">O que é</h2>
-        <p className="text-body">{demanda.resumo}</p>
-        {demanda.objetivo && <p className="text-body" style={{ color: 'var(--text-mid)' }}>{demanda.objetivo}</p>}
+        <p className="text-body">{atividade.resumo}</p>
+        {atividade.objetivo && <p className="text-body" style={{ color: 'var(--text-mid)' }}>{atividade.objetivo}</p>}
         <div className="detalhe-meta-grade">
-          {demanda.okr && <span><span className="meta-label">OKR</span> {demanda.okr}</span>}
-          {demanda.ganho && <span><span className="meta-label">Ganho</span> {demanda.ganho}</span>}
-          {demanda.responsavel && <span><span className="meta-label">Responsável</span> {demanda.responsavel}</span>}
-          {demanda.estimativa != null && <span><span className="meta-label">Estimativa</span> {demanda.estimativa} pts</span>}
-          {demanda.link_jira && <span><a href={demanda.link_jira} target="_blank" rel="noreferrer" className="link-acao">Ver no Jira</a></span>}
+          {atividade.responsavel && <span><span className="meta-label">Responsável</span> {atividade.responsavel}</span>}
+          {atividade.estimativa != null && <span><span className="meta-label">Estimativa</span> {atividade.estimativa} pts</span>}
+          {atividade.link_jira && <span><a href={atividade.link_jira} target="_blank" rel="noreferrer" className="link-acao">Ver no Jira</a></span>}
           {predecessora && (
             <span>
               <span className="meta-label">Depende de</span>
-              <Link to={`/espaco/demanda/${predecessora.id}`} className="link-acao">{predecessora.nome}</Link>
+              <Link to={`/espaco/atividade/${predecessora.id}`} className="link-acao">{predecessora.nome}</Link>
             </span>
           )}
           {sucessoras.length > 0 && (
@@ -234,7 +232,7 @@ export default function Demanda() {
               {sucessoras.map((s, i) => (
                 <span key={s.id}>
                   {i > 0 && ', '}
-                  <Link to={`/espaco/demanda/${s.id}`} className="link-acao">{s.nome}</Link>
+                  <Link to={`/espaco/atividade/${s.id}`} className="link-acao">{s.nome}</Link>
                 </span>
               ))}
             </span>
@@ -312,9 +310,9 @@ export default function Demanda() {
           </div>
         )}
 
-        {!proximoPasso && demanda.fase !== 'entregue' && (
-          <button type="button" className="link-acao" onClick={handleConcluirDemanda}>
-            Concluir demanda
+        {!proximoPasso && atividade.fase !== 'entregue' && (
+          <button type="button" className="link-acao" onClick={handleConcluirAtividade}>
+            Concluir atividade
           </button>
         )}
       </section>
@@ -346,10 +344,10 @@ export default function Demanda() {
       </section>
 
       {mostrarEditar && (
-        <Modal titulo="Editar demanda" onFechar={() => setMostrarEditar(false)}>
-          <FormDemanda
-            inicial={demanda}
-            outrasDemandas={outrasDemandas}
+        <Modal titulo="Editar atividade" onFechar={() => setMostrarEditar(false)}>
+          <FormAtividade
+            inicial={atividade}
+            outrasAtividades={outrasAtividades}
             onSalvar={handleSalvarEdicao}
             onExcluir={handleExcluir}
             onCancelar={() => setMostrarEditar(false)}

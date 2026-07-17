@@ -8,8 +8,6 @@ const VAZIO = {
   resumo: '',
   fase: 'discovery',
   objetivo: '',
-  okr: '',
-  ganho: '',
   responsavel: '',
   estimativa: '',
   link_jira: '',
@@ -18,7 +16,7 @@ const VAZIO = {
   predecessora_id: '',
 }
 
-export default function FormDemanda({ inicial, outrasDemandas = [], onSalvar, onExcluir, onCancelar }) {
+export default function FormAtividade({ inicial, outrasAtividades = [], onSalvar, onExcluir, onCancelar }) {
   const [dados, setDados] = useState(inicial ? { ...VAZIO, ...inicial } : VAZIO)
   const [detalhesAbertos, setDetalhesAbertos] = useState(false)
   const [erro, setErro] = useState('')
@@ -70,16 +68,16 @@ export default function FormDemanda({ inicial, outrasDemandas = [], onSalvar, on
     }
   }
 
-  // Exclui a própria demanda e suas sucessoras (evita ciclo A→B→A)
+  // Exclui a própria atividade e suas sucessoras (evita ciclo A→B→A)
   const idsInvalidos = inicial?.id
-    ? new Set([inicial.id, ...idsSucessoras(outrasDemandas, inicial.id)])
+    ? new Set([inicial.id, ...idsSucessoras(outrasAtividades, inicial.id)])
     : new Set()
-  const opcoesPredecessora = outrasDemandas.filter((d) => !idsInvalidos.has(d.id))
+  const opcoesPredecessora = outrasAtividades.filter((a) => !idsInvalidos.has(a.id))
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
       <div className="modal-cabecalho">
-        <h2 className="text-titulo">{inicial ? 'Editar demanda' : 'Nova demanda'}</h2>
+        <h2 className="text-titulo">{inicial ? 'Editar atividade' : 'Nova atividade'}</h2>
         <button type="button" className="modal-fechar" onClick={onCancelar} aria-label="Fechar">
           <X size={18} />
         </button>
@@ -134,17 +132,6 @@ export default function FormDemanda({ inicial, outrasDemandas = [], onSalvar, on
 
           <div className="campo-grade-2">
             <label className="campo">
-              <span className="text-label">OKR</span>
-              <input value={dados.okr} onChange={(e) => atualizar('okr', e.target.value)} />
-            </label>
-            <label className="campo">
-              <span className="text-label">Ganho</span>
-              <input value={dados.ganho} onChange={(e) => atualizar('ganho', e.target.value)} />
-            </label>
-          </div>
-
-          <div className="campo-grade-2">
-            <label className="campo">
               <span className="text-label">Responsável</span>
               <input value={dados.responsavel} onChange={(e) => atualizar('responsavel', e.target.value)} />
             </label>
@@ -174,8 +161,8 @@ export default function FormDemanda({ inicial, outrasDemandas = [], onSalvar, on
             <span className="text-label">Depende de</span>
             <select value={dados.predecessora_id} onChange={(e) => atualizar('predecessora_id', e.target.value)}>
               <option value="">Nenhuma</option>
-              {opcoesPredecessora.map((d) => (
-                <option key={d.id} value={d.id}>{d.nome}</option>
+              {opcoesPredecessora.map((a) => (
+                <option key={a.id} value={a.id}>{a.nome}</option>
               ))}
             </select>
           </label>
@@ -222,7 +209,7 @@ export default function FormDemanda({ inicial, outrasDemandas = [], onSalvar, on
           <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
             <button type="button" className="btn-secundario" onClick={onCancelar}>Cancelar</button>
             <button type="submit" className="btn-primario" disabled={enviando || !dados.nome.trim() || !dados.resumo.trim()}>
-              {enviando ? 'Salvando...' : inicial ? 'Salvar' : 'Criar demanda'}
+              {enviando ? 'Salvando...' : inicial ? 'Salvar' : 'Criar atividade'}
             </button>
           </div>
         </div>

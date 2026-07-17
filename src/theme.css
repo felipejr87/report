@@ -364,7 +364,7 @@ a.link-acao { text-decoration-line: underline; }
 }
 
 /* =============================================
-   Lista de demandas — lista, nunca grid de cards
+   Lista de atividades/projetos — lista, nunca grid de cards
    ============================================= */
 
 .layout-espaco {
@@ -373,12 +373,12 @@ a.link-acao { text-decoration-line: underline; }
   gap: var(--space-md);
 }
 
-.lista-demandas {
+.lista {
   display: flex;
   flex-direction: column;
 }
 
-.item-demanda {
+.item-atividade {
   border-top: 1px solid var(--line);
   padding: var(--space-md) 0;
   cursor: pointer;
@@ -387,17 +387,17 @@ a.link-acao { text-decoration-line: underline; }
   gap: 6px;
   transition: opacity var(--ease);
 }
-.lista-demandas .item-demanda:last-child {
+.lista .item-atividade:last-child {
   border-bottom: 1px solid var(--line);
 }
-.item-demanda:hover { opacity: 0.7; }
+.item-atividade:hover { opacity: 0.7; }
 
-.item-demanda-titulo {
+.item-atividade-titulo {
   font-size: 15px;
   font-weight: 500;
 }
 
-.item-demanda-meta {
+.item-atividade-meta {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -406,7 +406,7 @@ a.link-acao { text-decoration-line: underline; }
   color: var(--text-mid);
 }
 
-.item-demanda-passo {
+.item-atividade-passo {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
@@ -414,7 +414,7 @@ a.link-acao { text-decoration-line: underline; }
   color: var(--text-mid);
   flex-wrap: wrap;
 }
-.item-demanda-passo .seta { color: var(--text-dim); }
+.item-atividade-passo .seta { color: var(--text-dim); }
 
 /* =============================================
    Modal
@@ -555,7 +555,7 @@ a.link-acao { text-decoration-line: underline; }
 }
 
 /* =============================================
-   Tela de detalhe da demanda
+   Tela de detalhe da atividade
    ============================================= */
 
 .detalhe-pagina {

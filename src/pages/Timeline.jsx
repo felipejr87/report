@@ -15,7 +15,7 @@ export default function Timeline() {
   const { sessao } = useAuth()
 
   const [projeto, setProjeto] = useState(null)
-  const [demandas, setDemandas] = useState([])
+  const [atividades, setAtividades] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
 
@@ -25,14 +25,14 @@ export default function Timeline() {
     async function carregar() {
       if (!cliente) return
       setCarregando(true)
-      const [{ data: p, error: eP }, { data: d, error: eD }] = await Promise.all([
+      const [{ data: p, error: eP }, { data: a, error: eA }] = await Promise.all([
         cliente.from('projetos').select('*').eq('id', id).single(),
-        cliente.from('demandas').select('*').eq('projeto_id', id),
+        cliente.from('atividades').select('*').eq('projeto_id', id),
       ])
-      if (eP || eD) setErro((eP || eD).message)
+      if (eP || eA) setErro((eP || eA).message)
       else {
         setProjeto(p)
-        setDemandas(d || [])
+        setAtividades(a || [])
       }
       setCarregando(false)
     }
@@ -42,8 +42,8 @@ export default function Timeline() {
 
   if (!sessao) return <Navigate to="/" replace />
 
-  const mapaNomes = Object.fromEntries(demandas.map((d) => [d.id, d.nome]))
-  const { itens, semData, inicio, fim } = calcularGantt(demandas)
+  const mapaNomes = Object.fromEntries(atividades.map((a) => [a.id, a.nome]))
+  const { itens, semData, inicio, fim } = calcularGantt(atividades)
   const hoje = new Date()
   const hojePct = inicio && fim
     ? ((hoje.getTime() - inicio.getTime()) / (fim.getTime() - inicio.getTime())) * 100
@@ -67,8 +67,8 @@ export default function Timeline() {
 
       {carregando ? (
         <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
-      ) : demandas.length === 0 ? (
-        <p className="text-micro">Nenhuma demanda nesse projeto.</p>
+      ) : atividades.length === 0 ? (
+        <p className="text-micro">Nenhuma atividade nesse projeto.</p>
       ) : (
         <>
           <section className="detalhe-secao">
@@ -95,24 +95,24 @@ export default function Timeline() {
                   <div className="gantt-hoje" style={{ left: `${hojePct}%` }} title="Hoje" />
                 )}
                 {itens.map((item) => (
-                  <div key={item.demanda.id} className="gantt-linha">
+                  <div key={item.atividade.id} className="gantt-linha">
                     <div className="gantt-label">
-                      <Link to={`/espaco/demanda/${item.demanda.id}`} className="link-acao" style={{ fontWeight: 500 }}>
-                        {item.demanda.nome}
+                      <Link to={`/espaco/atividade/${item.atividade.id}`} className="link-acao" style={{ fontWeight: 500 }}>
+                        {item.atividade.nome}
                       </Link>
-                      {item.demanda.predecessora_id && (
+                      {item.atividade.predecessora_id && (
                         <span className="text-micro">
-                          {' '}depende de {mapaNomes[item.demanda.predecessora_id] || 'demanda de outro projeto'}
+                          {' '}depende de {mapaNomes[item.atividade.predecessora_id] || 'atividade de outro projeto'}
                         </span>
                       )}
                     </div>
                     <div className="gantt-trilha">
                       <div
                         className="gantt-barra"
-                        data-fase={item.demanda.fase}
+                        data-fase={item.atividade.fase}
                         data-aberta={item.semDataFim}
                         style={{ left: `${item.offsetPct}%`, width: `${item.larguraPct}%` }}
-                        title={`${item.demanda.data_inicio} → ${item.demanda.data_fim || 'em andamento'}`}
+                        title={`${item.atividade.data_inicio} → ${item.atividade.data_fim || 'em andamento'}`}
                       />
                     </div>
                   </div>
@@ -125,10 +125,10 @@ export default function Timeline() {
             <section className="detalhe-secao">
               <h2 className="section-label">Sem data definida</h2>
               <div className="timeline">
-                {semData.map((d) => (
-                  <div key={d.id} className="timeline-item">
-                    <span className="fase-ponto" data-fase={d.fase} aria-hidden="true" style={{ marginTop: 6 }} />
-                    <Link to={`/espaco/demanda/${d.id}`} className="link-acao">{d.nome}</Link>
+                {semData.map((a) => (
+                  <div key={a.id} className="timeline-item">
+                    <span className="fase-ponto" data-fase={a.fase} aria-hidden="true" style={{ marginTop: 6 }} />
+                    <Link to={`/espaco/atividade/${a.id}`} className="link-acao">{a.nome}</Link>
                   </div>
                 ))}
               </div>

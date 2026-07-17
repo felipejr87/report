@@ -2,7 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import Entrada from './pages/Entrada'
 import Espaco from './pages/Espaco'
 import Projeto from './pages/Projeto'
-import Demanda from './pages/Demanda'
+import Atividade from './pages/Atividade'
 import Timeline from './pages/Timeline'
 
 export default function App() {
@@ -11,7 +11,7 @@ export default function App() {
       <Route path="/" element={<Entrada />} />
       <Route path="/espaco" element={<Espaco />} />
       <Route path="/espaco/projeto/:id" element={<Projeto />} />
-      <Route path="/espaco/demanda/:id" element={<Demanda />} />
+      <Route path="/espaco/atividade/:id" element={<Atividade />} />
       <Route path="/espaco/timeline/:id" element={<Timeline />} />
     </Routes>
   )

@@ -77,7 +77,7 @@ export default function Entrada() {
             Report<span style={{ color: 'var(--brand)' }}>!</span>
           </h1>
           <p className="text-micro" style={{ marginBottom: 'var(--space-lg)' }}>
-            {modo === 'entrar' ? 'sua planilha, viva' : 'Onde está cada demanda e qual o próximo passo.'}
+            {modo === 'entrar' ? 'sua planilha, viva' : 'Onde está cada atividade e qual o próximo passo.'}
           </p>
 
           {erro && <p role="alert" className="campo-erro" style={{ marginBottom: 'var(--space-md)' }}>{erro}</p>}

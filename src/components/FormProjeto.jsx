@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { X, Flame } from 'lucide-react'
+import { X, Flame, ChevronDown, ChevronUp } from 'lucide-react'
 
-const VAZIO = { nome: '', data_entrega: '', quente: false }
+const VAZIO = { nome: '', data_entrega: '', quente: false, objetivo: '', okr: '', ganho: '' }
 
 export default function FormProjeto({ inicial, onSalvar, onCancelar }) {
   const [dados, setDados] = useState(inicial ? { ...VAZIO, ...inicial } : VAZIO)
+  const [detalhesAbertos, setDetalhesAbertos] = useState(false)
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
 
@@ -67,6 +68,33 @@ export default function FormProjeto({ inicial, onSalvar, onCancelar }) {
           Quente (observado pela gerência)
         </span>
       </label>
+
+      <button
+        type="button"
+        className="link-acao toggle-detalhes"
+        onClick={() => setDetalhesAbertos((v) => !v)}
+        aria-expanded={detalhesAbertos}
+      >
+        {detalhesAbertos ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        Detalhes do épico
+      </button>
+
+      {detalhesAbertos && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+          <label className="campo">
+            <span className="text-label">Objetivo</span>
+            <textarea rows={2} value={dados.objetivo} onChange={(e) => atualizar('objetivo', e.target.value)} />
+          </label>
+          <label className="campo">
+            <span className="text-label">OKR</span>
+            <input value={dados.okr} onChange={(e) => atualizar('okr', e.target.value)} />
+          </label>
+          <label className="campo">
+            <span className="text-label">Ganho</span>
+            <input value={dados.ganho} onChange={(e) => atualizar('ganho', e.target.value)} />
+          </label>
+        </div>
+      )}
 
       <div className="modal-rodape">
         <span />
