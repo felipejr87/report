@@ -4,7 +4,6 @@ import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import Header from '../components/Header'
-import FiltroFase from '../components/FiltroFase'
 import FiltroProjeto from '../components/FiltroProjeto'
 import CardDemanda from '../components/CardDemanda'
 import FormDemanda from '../components/FormDemanda'
@@ -16,7 +15,6 @@ export default function Espaco() {
   const { sessao, sair } = useAuth()
   const toast = useToast()
   const [demandas, setDemandas] = useState([])
-  const [filtro, setFiltro] = useState('todas')
   const [filtroProjeto, setFiltroProjeto] = useState('todos')
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
@@ -49,7 +47,6 @@ export default function Espaco() {
   if (!sessao) return <Navigate to="/" replace />
 
   const demandasFiltradas = demandas
-    .filter((d) => filtro === 'todas' || d.fase === filtro)
     .filter((d) => filtroProjeto === 'todos' || d.projeto === filtroProjeto)
 
   function abrirNova() {
@@ -159,26 +156,21 @@ export default function Espaco() {
       <Header espaco={sessao.espaco} onNova={abrirNova} onSair={sair} />
 
       <div className="layout-espaco">
-        <div className="sidebar-filtros" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-          <FiltroFase demandas={demandas} filtro={filtro} onFiltroChange={setFiltro} />
-          <FiltroProjeto demandas={demandas} filtro={filtroProjeto} onFiltroChange={setFiltroProjeto} />
-        </div>
+        <FiltroProjeto demandas={demandas} filtro={filtroProjeto} onFiltroChange={setFiltroProjeto} />
 
-        <div className="conteudo-principal">
-          {erro && <p role="alert" className="campo-erro" style={{ marginBottom: 'var(--space-md)' }}>{erro}</p>}
+        {erro && <p role="alert" className="campo-erro">{erro}</p>}
 
-          {carregando ? (
-            <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
-          ) : demandasFiltradas.length === 0 ? (
-            <EstadoVazio onCriar={abrirNova} />
-          ) : (
-            <div className="lista-demandas">
-              {demandasFiltradas.map((d) => (
-                <CardDemanda key={d.id} demanda={d} onEditar={abrirEdicao} onMudarFase={mudarFase} onConcluirPasso={concluirPasso} />
-              ))}
-            </div>
-          )}
-        </div>
+        {carregando ? (
+          <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
+        ) : demandasFiltradas.length === 0 ? (
+          <EstadoVazio onCriar={abrirNova} />
+        ) : (
+          <div className="lista-demandas">
+            {demandasFiltradas.map((d) => (
+              <CardDemanda key={d.id} demanda={d} onEditar={abrirEdicao} onMudarFase={mudarFase} onConcluirPasso={concluirPasso} />
+            ))}
+          </div>
+        )}
       </div>
 
       {mostrarForm && (

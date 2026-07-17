@@ -559,21 +559,14 @@ button:disabled {
   .lista-demandas { grid-template-columns: 1fr 1fr; }
 }
 
+@media (min-width: 1024px) {
+  .lista-demandas { grid-template-columns: 1fr 1fr 1fr; }
+}
+
 .layout-espaco {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-}
-
-@media (min-width: 1024px) {
-  .layout-espaco { flex-direction: row; align-items: flex-start; }
-  .layout-espaco .sidebar-filtros {
-    flex: 0 0 200px;
-    position: sticky;
-    top: var(--space-md);
-  }
-  .layout-espaco .conteudo-principal { flex: 1; min-width: 0; }
-  .filtro-fase { flex-direction: column; overflow-x: visible; }
 }
 
 /* =============================================
