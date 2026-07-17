@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { Trash2, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { Trash2, X, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
 import { FASES, ROTULO_FASE } from './ChipFase'
 import { idsSucessoras } from '../lib/timeline'
 
 const VAZIO = {
   nome: '',
-  projeto: '',
   resumo: '',
   fase: 'discovery',
   objetivo: '',
@@ -24,6 +23,8 @@ export default function FormDemanda({ inicial, outrasDemandas = [], onSalvar, on
   const [detalhesAbertos, setDetalhesAbertos] = useState(false)
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false)
+  const [textoConfirmacao, setTextoConfirmacao] = useState('')
   const [excluindo, setExcluindo] = useState(false)
 
   function atualizar(campo, valor) {
@@ -56,8 +57,10 @@ export default function FormDemanda({ inicial, outrasDemandas = [], onSalvar, on
     }
   }
 
-  async function handleExcluir() {
-    if (!window.confirm(`Excluir "${dados.nome}"? Essa ação não pode ser desfeita.`)) return
+  const nomeConfere = textoConfirmacao.trim().toLowerCase() === dados.nome.trim().toLowerCase()
+
+  async function handleExcluirDefinitivo() {
+    if (!nomeConfere) return
     setExcluindo(true)
     try {
       await onExcluir()
@@ -87,11 +90,6 @@ export default function FormDemanda({ inicial, outrasDemandas = [], onSalvar, on
       <label className="campo">
         <span className="text-label">Nome *</span>
         <input value={dados.nome} onChange={(e) => atualizar('nome', e.target.value)} autoFocus required />
-      </label>
-
-      <label className="campo">
-        <span className="text-label">Projeto / Tema</span>
-        <input value={dados.projeto} onChange={(e) => atualizar('projeto', e.target.value)} placeholder="Ex: Entendimento de Fatura" />
       </label>
 
       <label className="campo">
@@ -184,21 +182,51 @@ export default function FormDemanda({ inicial, outrasDemandas = [], onSalvar, on
         </div>
       )}
 
-      <div className="modal-rodape">
-        {inicial?.id ? (
-          <button type="button" className="btn-perigo" onClick={handleExcluir} disabled={excluindo}>
-            <Trash2 size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
-            {excluindo ? 'Excluindo...' : 'Excluir'}
-          </button>
-        ) : <span />}
-
-        <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-          <button type="button" className="btn-secundario" onClick={onCancelar}>Cancelar</button>
-          <button type="submit" className="btn-primario" disabled={enviando || !dados.nome.trim() || !dados.resumo.trim()}>
-            {enviando ? 'Salvando...' : inicial ? 'Salvar' : 'Criar demanda'}
-          </button>
+      {confirmandoExclusao ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', borderTop: '1px solid var(--line)', paddingTop: 'var(--space-md)' }}>
+          <p className="text-body" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--atencao)' }}>
+            <AlertTriangle size={16} />
+            Essa ação não pode ser desfeita.
+          </p>
+          <label className="campo">
+            <span className="text-label">Digite &quot;{dados.nome}&quot; pra confirmar</span>
+            <input value={textoConfirmacao} onChange={(e) => setTextoConfirmacao(e.target.value)} autoFocus />
+          </label>
+          <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+            <button
+              type="button"
+              className="btn-secundario"
+              onClick={() => { setConfirmandoExclusao(false); setTextoConfirmacao('') }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn-perigo"
+              onClick={handleExcluirDefinitivo}
+              disabled={!nomeConfere || excluindo}
+            >
+              {excluindo ? 'Excluindo...' : 'Excluir definitivamente'}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="modal-rodape">
+          {inicial?.id ? (
+            <button type="button" className="btn-perigo" onClick={() => setConfirmandoExclusao(true)}>
+              <Trash2 size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
+              Excluir
+            </button>
+          ) : <span />}
+
+          <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+            <button type="button" className="btn-secundario" onClick={onCancelar}>Cancelar</button>
+            <button type="submit" className="btn-primario" disabled={enviando || !dados.nome.trim() || !dados.resumo.trim()}>
+              {enviando ? 'Salvando...' : inicial ? 'Salvar' : 'Criar demanda'}
+            </button>
+          </div>
+        </div>
+      )}
     </form>
   )
 }

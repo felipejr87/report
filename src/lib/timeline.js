@@ -22,28 +22,61 @@ export async function buscarProximosPassosPendentes(cliente, demandaIds) {
   return mapa
 }
 
-export async function concluirAcao(cliente, movimentoId, demandaId) {
+export async function concluirAcao(cliente, movimentoId, demandaId, usuario) {
   const agora = new Date().toISOString()
+  const { data: atual } = await cliente.from('movimentos').select('detalhe').eq('id', movimentoId).single()
+
   const { error } = await cliente
     .from('movimentos')
-    .update({ status: 'concluido', tipo: 'acao_concluida', concluido_em: agora })
+    .update({
+      status: 'concluido',
+      tipo: 'acao_concluida',
+      concluido_em: agora,
+      detalhe: { ...atual?.detalhe, concluido_por: usuario || null },
+    })
     .eq('id', movimentoId)
   if (error) throw error
 
   await cliente.from('demandas').update({ atualizado_em: agora }).eq('id', demandaId)
 }
 
-export async function adicionarAcao(cliente, demandaId, texto) {
+export async function adicionarAcao(cliente, demandaId, texto, usuario) {
   const agora = new Date().toISOString()
   const { data, error } = await cliente
     .from('movimentos')
-    .insert({ demanda_id: demandaId, tipo: 'acao_planejada', status: 'pendente', ordem: 0, detalhe: { texto } })
+    .insert({
+      demanda_id: demandaId,
+      tipo: 'acao_planejada',
+      status: 'pendente',
+      ordem: 0,
+      detalhe: { texto, criado_por: usuario || null },
+    })
     .select()
     .single()
   if (error) throw error
 
   await cliente.from('demandas').update({ atualizado_em: agora }).eq('id', demandaId)
   return data
+}
+
+export async function editarAcao(cliente, movimento, demandaId, novoTexto, usuario) {
+  const agora = new Date().toISOString()
+  const textoAntigo = movimento.detalhe?.texto
+
+  const { error: eUpdate } = await cliente
+    .from('movimentos')
+    .update({ detalhe: { ...movimento.detalhe, texto: novoTexto, editado_por: usuario || null } })
+    .eq('id', movimento.id)
+  if (eUpdate) throw eUpdate
+
+  const { error: eLog } = await cliente.from('movimentos').insert({
+    demanda_id: demandaId,
+    tipo: 'edicao',
+    detalhe: { texto: 'Próximo passo editado', de: textoAntigo, para: novoTexto, usuario: usuario || null },
+  })
+  if (eLog) throw eLog
+
+  await cliente.from('demandas').update({ atualizado_em: agora }).eq('id', demandaId)
 }
 
 export function gerarReportTexto(demanda, movimentos) {

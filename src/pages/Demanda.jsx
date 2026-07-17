@@ -1,28 +1,53 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Navigate, Link } from 'react-router-dom'
-import { ArrowLeft, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Copy, Check, Pencil } from 'lucide-react'
 import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
-import { concluirAcao, adicionarAcao, gerarReportTexto } from '../lib/timeline'
-import ChipFase from '../components/ChipFase'
+import { useUsuario } from '../hooks/useUsuario'
+import { concluirAcao, adicionarAcao, editarAcao, gerarReportTexto } from '../lib/timeline'
+import ChipFase, { ROTULO_FASE } from '../components/ChipFase'
 import Modal from '../components/Modal'
 import FormDemanda from '../components/FormDemanda'
+
+const ROTULO_TIPO_MOVIMENTO = {
+  criacao: 'Demanda criada',
+  edicao: 'Demanda editada',
+}
+
+function descricaoMovimento(m) {
+  if (m.tipo === 'fase' && m.detalhe?.de && m.detalhe?.para) {
+    return `Movida de ${ROTULO_FASE[m.detalhe.de] || m.detalhe.de} para ${ROTULO_FASE[m.detalhe.para] || m.detalhe.para}`
+  }
+  if (m.tipo === 'acao_planejada') return `Próximo passo definido: "${m.detalhe?.texto}"`
+  if (m.tipo === 'acao_concluida') return `Passo concluído: "${m.detalhe?.texto}"`
+  if (m.tipo === 'edicao' && m.detalhe?.de !== undefined) return `${m.detalhe.texto}: "${m.detalhe.de}" → "${m.detalhe.para}"`
+  return ROTULO_TIPO_MOVIMENTO[m.tipo] || m.tipo
+}
+
+function usuarioDoMovimento(m) {
+  return m.detalhe?.usuario || m.detalhe?.criado_por || m.detalhe?.concluido_por || m.detalhe?.editado_por
+}
 
 export default function Demanda() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { sessao } = useAuth()
   const toast = useToast()
+  const { usuario } = useUsuario()
 
   const [demanda, setDemanda] = useState(null)
+  const [projeto, setProjeto] = useState(null)
   const [movimentos, setMovimentos] = useState([])
   const [outrasDemandas, setOutrasDemandas] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [novoPasso, setNovoPasso] = useState('')
   const [enviandoPasso, setEnviandoPasso] = useState(false)
+  const [editandoPasso, setEditandoPasso] = useState(false)
+  const [textoEdicaoPasso, setTextoEdicaoPasso] = useState('')
   const [mostrarEditar, setMostrarEditar] = useState(false)
+  const [mostrarHistorico, setMostrarHistorico] = useState(false)
   const [copiado, setCopiado] = useState(false)
 
   const cliente = sessao ? supabaseEspaco(sessao.token) : null
@@ -40,10 +65,19 @@ export default function Demanda() {
 
     if (eD || eM || eO) {
       setErro((eD || eM || eO).message)
+      setCarregando(false)
+      return
+    }
+
+    setDemanda(d)
+    setMovimentos(m || [])
+    setOutrasDemandas((outras || []).filter((o) => o.id !== id))
+
+    if (d.projeto_id) {
+      const { data: p } = await cliente.from('projetos').select('id, nome').eq('id', d.projeto_id).single()
+      setProjeto(p)
     } else {
-      setDemanda(d)
-      setMovimentos(m || [])
-      setOutrasDemandas((outras || []).filter((o) => o.id !== id))
+      setProjeto(null)
     }
     setCarregando(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,10 +94,13 @@ export default function Demanda() {
   const feitos = movimentos
     .filter((m) => m.status === 'concluido' && m.detalhe?.texto)
     .sort((a, b) => new Date(b.concluido_em || b.criado_em) - new Date(a.concluido_em || a.criado_em))
+  const historicoCompleto = movimentos
+    .slice()
+    .sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em))
 
   async function handleConcluirPasso() {
     try {
-      await concluirAcao(cliente, proximoPasso.id, id)
+      await concluirAcao(cliente, proximoPasso.id, id, usuario)
       toast?.sucesso('Passo concluído.')
       await carregar()
     } catch (err) {
@@ -75,13 +112,30 @@ export default function Demanda() {
     if (!novoPasso.trim()) return
     setEnviandoPasso(true)
     try {
-      await adicionarAcao(cliente, id, novoPasso.trim())
+      await adicionarAcao(cliente, id, novoPasso.trim(), usuario)
       setNovoPasso('')
       await carregar()
     } catch (err) {
       toast?.erro(err.message)
     } finally {
       setEnviandoPasso(false)
+    }
+  }
+
+  function abrirEdicaoPasso() {
+    setTextoEdicaoPasso(proximoPasso.detalhe.texto)
+    setEditandoPasso(true)
+  }
+
+  async function handleSalvarEdicaoPasso() {
+    if (!textoEdicaoPasso.trim()) return
+    try {
+      await editarAcao(cliente, proximoPasso, id, textoEdicaoPasso.trim(), usuario)
+      toast?.sucesso('Próximo passo editado.')
+      setEditandoPasso(false)
+      await carregar()
+    } catch (err) {
+      toast?.erro(err.message)
     }
   }
 
@@ -95,7 +149,7 @@ export default function Demanda() {
     await cliente.from('movimentos').insert({
       demanda_id: id,
       tipo: 'fase',
-      detalhe: { de: demanda.fase, para: 'entregue' },
+      detalhe: { de: demanda.fase, para: 'entregue', usuario: usuario || null },
     })
 
     toast?.sucesso('Demanda concluída.')
@@ -112,7 +166,7 @@ export default function Demanda() {
     await cliente.from('movimentos').insert({
       demanda_id: id,
       tipo: 'edicao',
-      detalhe: dados,
+      detalhe: { texto: 'Demanda editada', usuario: usuario || null },
     })
     toast?.sucesso('Demanda atualizada.')
     setMostrarEditar(false)
@@ -123,7 +177,7 @@ export default function Demanda() {
     const { error } = await cliente.from('demandas').delete().eq('id', id)
     if (error) throw error
     toast?.sucesso('Demanda excluída.')
-    navigate('/espaco')
+    navigate(demanda.projeto_id ? `/espaco/projeto/${demanda.projeto_id}` : '/espaco')
   }
 
   async function handleCopiarReport() {
@@ -141,7 +195,7 @@ export default function Demanda() {
   return (
     <div className="detalhe-pagina">
       <header className="detalhe-header">
-        <Link to="/espaco" className="link-voltar">
+        <Link to={demanda.projeto_id ? `/espaco/projeto/${demanda.projeto_id}` : '/espaco'} className="link-voltar">
           <ArrowLeft size={16} />
           Voltar
         </Link>
@@ -153,7 +207,7 @@ export default function Demanda() {
 
       <div className="detalhe-titulo-area">
         <ChipFase fase={demanda.fase} />
-        {demanda.projeto && <span className="text-micro">{demanda.projeto}</span>}
+        {projeto && <Link to={`/espaco/projeto/${projeto.id}`} className="text-micro">{projeto.nome}</Link>}
         <h1 className="text-hero">{demanda.nome}</h1>
         <button type="button" className="link-acao" onClick={() => setMostrarEditar(true)}>Editar</button>
       </div>
@@ -191,12 +245,33 @@ export default function Demanda() {
       <section className="detalhe-secao">
         <h2 className="section-label">Próximo passo</h2>
         {proximoPasso ? (
-          <div className="proximo-passo-linha">
-            <span>{proximoPasso.detalhe.texto}</span>
-            <button type="button" className="link-acao" onClick={handleConcluirPasso}>
-              Marcar como concluído
-            </button>
-          </div>
+          editandoPasso ? (
+            <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'flex-end' }}>
+              <label className="campo" style={{ flex: 1 }}>
+                <input
+                  value={textoEdicaoPasso}
+                  onChange={(e) => setTextoEdicaoPasso(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSalvarEdicaoPasso()}
+                  autoFocus
+                />
+              </label>
+              <button type="button" className="btn-secundario" onClick={() => setEditandoPasso(false)}>Cancelar</button>
+              <button type="button" className="btn-primario" onClick={handleSalvarEdicaoPasso} disabled={!textoEdicaoPasso.trim()}>Salvar</button>
+            </div>
+          ) : (
+            <div className="proximo-passo-linha">
+              <span>{proximoPasso.detalhe.texto}</span>
+              <span style={{ display: 'flex', gap: 'var(--space-md)' }}>
+                <button type="button" className="link-acao" onClick={abrirEdicaoPasso}>
+                  <Pencil size={12} />
+                  Editar
+                </button>
+                <button type="button" className="link-acao" onClick={handleConcluirPasso}>
+                  Marcar como concluído
+                </button>
+              </span>
+            </div>
+          )
         ) : (
           <p className="text-micro">Nenhum próximo passo definido.</p>
         )}
@@ -211,7 +286,10 @@ export default function Demanda() {
                 <span className="text-micro" style={{ whiteSpace: 'nowrap' }}>
                   {new Date(m.concluido_em || m.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                 </span>
-                <span className="text-body">{m.detalhe?.texto}</span>
+                <span className="text-body">
+                  {m.detalhe?.texto}
+                  {usuarioDoMovimento(m) && <span className="text-micro"> · {usuarioDoMovimento(m)}</span>}
+                </span>
               </div>
             ))}
           </div>
@@ -238,6 +316,32 @@ export default function Demanda() {
           <button type="button" className="link-acao" onClick={handleConcluirDemanda}>
             Concluir demanda
           </button>
+        )}
+      </section>
+
+      <section className="detalhe-secao">
+        <button
+          type="button"
+          className="link-acao toggle-detalhes"
+          onClick={() => setMostrarHistorico((v) => !v)}
+          aria-expanded={mostrarHistorico}
+        >
+          Histórico completo {historicoCompleto.length ? `(${historicoCompleto.length})` : ''}
+        </button>
+        {mostrarHistorico && (
+          <div className="timeline" style={{ marginTop: 'var(--space-sm)' }}>
+            {historicoCompleto.map((m) => (
+              <div key={m.id} className="timeline-item">
+                <span className="text-micro" style={{ whiteSpace: 'nowrap' }}>
+                  {new Date(m.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                </span>
+                <span className="text-body">
+                  {descricaoMovimento(m)}
+                  {usuarioDoMovimento(m) && <span className="text-micro"> · {usuarioDoMovimento(m)}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 

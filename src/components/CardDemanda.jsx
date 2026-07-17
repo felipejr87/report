@@ -17,12 +17,6 @@ export default function CardDemanda({ demanda, onConcluirPasso, onClick }) {
         <ChipFase fase={demanda.fase} />
         <span className="separador-ponto">·</span>
         <span>{demanda.responsavel || 'sem responsável'}</span>
-        {demanda.projeto && (
-          <>
-            <span className="separador-ponto">·</span>
-            <span>{demanda.projeto}</span>
-          </>
-        )}
         <BadgeParado atualizadoEm={demanda.atualizado_em} />
       </div>
 

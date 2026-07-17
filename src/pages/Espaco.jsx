@@ -1,27 +1,24 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Navigate, useNavigate, Link } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
+import { Flame, AlertTriangle, Plus } from 'lucide-react'
 import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
-import { buscarProximosPassosPendentes, concluirAcao } from '../lib/timeline'
+import { ordenarProjetosPorEntrega, precisaDeTracao } from '../lib/projeto'
 import Header from '../components/Header'
-import FiltroProjeto from '../components/FiltroProjeto'
-import CardDemanda from '../components/CardDemanda'
-import FormDemanda from '../components/FormDemanda'
+import FormProjeto from '../components/FormProjeto'
 import Modal from '../components/Modal'
-import EstadoVazio from '../components/EstadoVazio'
 
 export default function Espaco() {
   const { sessao, sair } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
 
+  const [projetos, setProjetos] = useState([])
   const [demandas, setDemandas] = useState([])
-  const [proximosPassos, setProximosPassos] = useState({})
-  const [filtroProjeto, setFiltroProjeto] = useState('todos')
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
-  const [mostrarNova, setMostrarNova] = useState(false)
+  const [mostrarNovo, setMostrarNovo] = useState(false)
 
   const cliente = sessao ? supabaseEspaco(sessao.token) : null
 
@@ -30,24 +27,16 @@ export default function Espaco() {
     setCarregando(true)
     setErro('')
 
-    const { data, error } = await cliente
-      .from('demandas')
-      .select('*')
-      .order('atualizado_em', { ascending: false })
+    const [{ data: p, error: eP }, { data: d, error: eD }] = await Promise.all([
+      cliente.from('projetos').select('*'),
+      cliente.from('demandas').select('id, projeto_id, fase, atualizado_em'),
+    ])
 
-    if (error) {
-      setErro(error.message)
-      setCarregando(false)
-      return
-    }
-
-    setDemandas(data)
-
-    if (data.length) {
-      const mapa = await buscarProximosPassosPendentes(cliente, data.map((d) => d.id))
-      setProximosPassos(mapa)
+    if (eP || eD) {
+      setErro((eP || eD).message)
     } else {
-      setProximosPassos({})
+      setProjetos(p || [])
+      setDemandas(d || [])
     }
     setCarregando(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,76 +46,91 @@ export default function Espaco() {
 
   if (!sessao) return <Navigate to="/" replace />
 
-  const demandasFiltradas = demandas.filter(
-    (d) => filtroProjeto === 'todos' || d.projeto === filtroProjeto
-  )
-
-  async function criar(dados) {
+  async function criarProjeto(dados) {
     const { data, error } = await cliente
-      .from('demandas')
+      .from('projetos')
       .insert({ ...dados, espaco_id: sessao.espaco.id })
       .select()
       .single()
     if (error) throw error
 
-    await cliente.from('movimentos').insert({
-      demanda_id: data.id,
-      tipo: 'criacao',
-      detalhe: { texto: 'Demanda criada' },
-    })
-
-    toast?.sucesso('Demanda criada.')
-    setMostrarNova(false)
+    toast?.sucesso('Projeto criado.')
+    setMostrarNovo(false)
     await carregar()
+    navigate(`/espaco/projeto/${data.id}`)
   }
 
-  async function concluirPasso(movimento, demandaId) {
-    try {
-      await concluirAcao(cliente, movimento.id, demandaId)
-      toast?.sucesso('Passo concluído.')
-      await carregar()
-    } catch (err) {
-      toast?.erro(err.message)
-    }
-  }
+  const projetosOrdenados = ordenarProjetosPorEntrega(projetos)
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-      <Header espaco={sessao.espaco} onNova={() => setMostrarNova(true)} onSair={sair} />
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+      <Header espaco={sessao.espaco} onSair={sair} />
 
       <div className="layout-espaco">
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
-          <FiltroProjeto demandas={demandas} filtro={filtroProjeto} onFiltroChange={setFiltroProjeto} />
-          {filtroProjeto !== 'todos' && (
-            <Link to={`/espaco/timeline?projeto=${encodeURIComponent(filtroProjeto)}`} className="link-acao">
-              Ver timeline
-            </Link>
-          )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h1 className="text-titulo">Projetos</h1>
+          <button type="button" className="btn-primario" onClick={() => setMostrarNovo(true)}>
+            <Plus size={16} style={{ marginRight: 4, verticalAlign: -3 }} />
+            Novo projeto
+          </button>
         </div>
 
         {erro && <p role="alert" className="campo-erro">{erro}</p>}
 
         {carregando ? (
           <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
-        ) : demandasFiltradas.length === 0 ? (
-          <EstadoVazio onCriar={() => setMostrarNova(true)} />
+        ) : projetosOrdenados.length === 0 ? (
+          <p className="text-micro">Nenhum projeto ainda. Crie o primeiro pra começar.</p>
         ) : (
           <div className="lista-demandas">
-            {demandasFiltradas.map((d) => (
-              <CardDemanda
-                key={d.id}
-                demanda={{ ...d, proximoPasso: proximosPassos[d.id] }}
-                onConcluirPasso={concluirPasso}
-                onClick={() => navigate(`/espaco/demanda/${d.id}`)}
-              />
-            ))}
+            {projetosOrdenados.map((p) => {
+              const demandasDoProjeto = demandas.filter((d) => d.projeto_id === p.id)
+              const tracao = precisaDeTracao(p, demandasDoProjeto)
+              const total = demandasDoProjeto.length
+              const entregues = demandasDoProjeto.filter((d) => d.fase === 'entregue').length
+
+              return (
+                <div
+                  key={p.id}
+                  className="item-demanda"
+                  onClick={() => navigate(`/espaco/projeto/${p.id}`)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/espaco/projeto/${p.id}`) } }}
+                  aria-label={`Abrir projeto ${p.nome}`}
+                >
+                  <div className="item-demanda-titulo" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {p.quente && <Flame size={14} color="var(--atencao)" aria-label="Quente" />}
+                    {p.nome}
+                  </div>
+                  <div className="item-demanda-meta">
+                    <span>{total === 0 ? 'sem demandas' : `${entregues}/${total} concluídas`}</span>
+                    {p.data_entrega && (
+                      <>
+                        <span className="separador-ponto">·</span>
+                        <span>entrega {new Date(p.data_entrega).toLocaleDateString('pt-BR')}</span>
+                      </>
+                    )}
+                    {tracao && (
+                      <>
+                        <span className="separador-ponto">·</span>
+                        <span className="texto-atencao" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <AlertTriangle size={12} />
+                          precisa de atenção
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
 
-      {mostrarNova && (
-        <Modal titulo="Nova demanda" onFechar={() => setMostrarNova(false)}>
-          <FormDemanda outrasDemandas={demandas} onSalvar={criar} onCancelar={() => setMostrarNova(false)} />
+      {mostrarNovo && (
+        <Modal titulo="Novo projeto" onFechar={() => setMostrarNovo(false)}>
+          <FormProjeto onSalvar={criarProjeto} onCancelar={() => setMostrarNovo(false)} />
         </Modal>
       )}
     </div>

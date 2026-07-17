@@ -5,6 +5,7 @@ import App from './App'
 import { AuthProvider } from './hooks/useAuth'
 import { ToastProvider } from './hooks/useToast'
 import { ThemeProvider } from './hooks/useTheme'
+import { UsuarioProvider } from './hooks/useUsuario'
 import './theme.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -12,9 +13,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <ThemeProvider>
       <BrowserRouter>
         <AuthProvider>
-          <ToastProvider>
-            <App />
-          </ToastProvider>
+          <UsuarioProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </UsuarioProvider>
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>

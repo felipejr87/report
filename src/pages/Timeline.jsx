@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams, Navigate, Link } from 'react-router-dom'
+import { useParams, Navigate, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -11,10 +11,10 @@ function formatarData(d) {
 }
 
 export default function Timeline() {
-  const [searchParams] = useSearchParams()
-  const projeto = searchParams.get('projeto')
+  const { id } = useParams()
   const { sessao } = useAuth()
 
+  const [projeto, setProjeto] = useState(null)
   const [demandas, setDemandas] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
@@ -23,19 +23,24 @@ export default function Timeline() {
 
   useEffect(() => {
     async function carregar() {
-      if (!cliente || !projeto) return
+      if (!cliente) return
       setCarregando(true)
-      const { data, error } = await cliente.from('demandas').select('*').eq('projeto', projeto)
-      if (error) setErro(error.message)
-      else setDemandas(data || [])
+      const [{ data: p, error: eP }, { data: d, error: eD }] = await Promise.all([
+        cliente.from('projetos').select('*').eq('id', id).single(),
+        cliente.from('demandas').select('*').eq('projeto_id', id),
+      ])
+      if (eP || eD) setErro((eP || eD).message)
+      else {
+        setProjeto(p)
+        setDemandas(d || [])
+      }
       setCarregando(false)
     }
     carregar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projeto, sessao?.token])
+  }, [id, sessao?.token])
 
   if (!sessao) return <Navigate to="/" replace />
-  if (!projeto) return <Navigate to="/espaco" replace />
 
   const mapaNomes = Object.fromEntries(demandas.map((d) => [d.id, d.nome]))
   const { itens, semData, inicio, fim } = calcularGantt(demandas)
@@ -47,7 +52,7 @@ export default function Timeline() {
   return (
     <div className="detalhe-pagina" style={{ maxWidth: 860 }}>
       <header className="detalhe-header">
-        <Link to="/espaco" className="link-voltar">
+        <Link to={`/espaco/projeto/${id}`} className="link-voltar">
           <ArrowLeft size={16} />
           Voltar
         </Link>
@@ -55,7 +60,7 @@ export default function Timeline() {
 
       <div className="detalhe-titulo-area">
         <span className="text-micro">Timeline do projeto</span>
-        <h1 className="text-hero" style={{ fontSize: 28 }}>{projeto}</h1>
+        <h1 className="text-hero" style={{ fontSize: 28 }}>{projeto?.nome || '...'}</h1>
       </div>
 
       {erro && <p role="alert" className="campo-erro">{erro}</p>}
