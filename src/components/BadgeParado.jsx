@@ -1,6 +1,3 @@
-import { AlertTriangle } from 'lucide-react'
-import { useReducedMotion } from '../hooks/useReducedMotion'
-
 const LIMITE_DIAS = 3
 
 function diasDesde(dataIso) {
@@ -9,14 +6,13 @@ function diasDesde(dataIso) {
 }
 
 export default function BadgeParado({ atualizadoEm }) {
-  const reduzido = useReducedMotion()
   const dias = diasDesde(atualizadoEm)
   if (dias < LIMITE_DIAS) return null
 
   return (
-    <span className="badge-parado" data-pulse={!reduzido}>
-      <AlertTriangle size={12} />
-      Sem movimento há {dias}d
-    </span>
+    <>
+      <span className="separador-ponto">·</span>
+      <span className="texto-atencao">{dias}d sem movimento</span>
+    </>
   )
 }

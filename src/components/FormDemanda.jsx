@@ -1,20 +1,15 @@
 import { useState } from 'react'
-import { Trash2, X } from 'lucide-react'
+import { Trash2, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { FASES, ROTULO_FASE } from './ChipFase'
-import HistoricoDemanda from './HistoricoDemanda'
-
-const PONTOS = ['1', '2', '3', '5', '8', '13', '21', '?']
 
 const VAZIO = {
   nome: '',
   projeto: '',
   resumo: '',
+  fase: 'discovery',
   objetivo: '',
   okr: '',
   ganho: '',
-  fase: 'discovery',
-  proximo_passo: '',
-  proximo_passo_feito: false,
   responsavel: '',
   estimativa: '',
   link_jira: '',
@@ -22,18 +17,15 @@ const VAZIO = {
   data_fim: '',
 }
 
-export default function FormDemanda({ inicial, historico, onSalvar, onExcluir, onCancelar }) {
+export default function FormDemanda({ inicial, onSalvar, onExcluir, onCancelar }) {
   const [dados, setDados] = useState(inicial ? { ...VAZIO, ...inicial } : VAZIO)
+  const [detalhesAbertos, setDetalhesAbertos] = useState(false)
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
 
   function atualizar(campo, valor) {
     setDados((d) => ({ ...d, [campo]: valor }))
-  }
-
-  function escolherPontos(valor) {
-    atualizar('estimativa', valor === '?' ? '' : valor)
   }
 
   async function handleSubmit(e) {
@@ -75,7 +67,7 @@ export default function FormDemanda({ inicial, historico, onSalvar, onExcluir, o
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
       <div className="modal-cabecalho">
-        <h2 className="text-card-title">{inicial ? 'Editar demanda' : 'Nova demanda'}</h2>
+        <h2 className="text-titulo">{inicial ? 'Editar demanda' : 'Nova demanda'}</h2>
         <button type="button" className="modal-fechar" onClick={onCancelar} aria-label="Fechar">
           <X size={18} />
         </button>
@@ -85,107 +77,92 @@ export default function FormDemanda({ inicial, historico, onSalvar, onExcluir, o
 
       <label className="campo">
         <span className="text-label">Nome *</span>
-        <input value={dados.nome} onChange={(e) => atualizar('nome', e.target.value)} data-erro={!!erro && !dados.nome.trim()} required />
+        <input value={dados.nome} onChange={(e) => atualizar('nome', e.target.value)} autoFocus required />
       </label>
 
       <label className="campo">
         <span className="text-label">Projeto / Tema</span>
-        <input value={dados.projeto} onChange={(e) => atualizar('projeto', e.target.value)} placeholder="Ex: Entendimento de Fatura - Loja" />
+        <input value={dados.projeto} onChange={(e) => atualizar('projeto', e.target.value)} placeholder="Ex: Entendimento de Fatura" />
       </label>
 
       <label className="campo">
-        <span className="text-label">Resumo *</span>
-        <textarea value={dados.resumo} onChange={(e) => atualizar('resumo', e.target.value)} rows={2} data-erro={!!erro && !dados.resumo.trim()} required />
-      </label>
-
-      <label className="campo">
-        <span className="text-label">Objetivo</span>
-        <textarea value={dados.objetivo} onChange={(e) => atualizar('objetivo', e.target.value)} rows={2} />
-      </label>
-
-      <div className="campo-grade-2">
-        <label className="campo">
-          <span className="text-label">OKR</span>
-          <input value={dados.okr} onChange={(e) => atualizar('okr', e.target.value)} />
-        </label>
-        <label className="campo">
-          <span className="text-label">Ganho</span>
-          <input value={dados.ganho} onChange={(e) => atualizar('ganho', e.target.value)} />
-        </label>
-      </div>
-
-      <div className="campo-grade-2">
-        <label className="campo">
-          <span className="text-label">Responsável</span>
-          <input value={dados.responsavel} onChange={(e) => atualizar('responsavel', e.target.value)} />
-        </label>
-        <label className="campo">
-          <span className="text-label">Fase</span>
-          <select value={dados.fase} onChange={(e) => atualizar('fase', e.target.value)}>
-            {FASES.map((f) => <option key={f} value={f}>{ROTULO_FASE[f]}</option>)}
-          </select>
-        </label>
-      </div>
-
-      <label className="campo">
-        <span className="text-label">Próximo passo</span>
-        <input value={dados.proximo_passo} onChange={(e) => atualizar('proximo_passo', e.target.value)} />
-      </label>
-
-      <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', cursor: 'pointer' }}>
-        <input
-          type="checkbox"
-          checked={dados.proximo_passo_feito}
-          onChange={(e) => atualizar('proximo_passo_feito', e.target.checked)}
-          style={{ width: 14, height: 14 }}
-        />
-        <span className="text-body">Próximo passo já concluído</span>
+        <span className="text-label">O que é *</span>
+        <textarea rows={3} value={dados.resumo} onChange={(e) => atualizar('resumo', e.target.value)} required />
       </label>
 
       <div className="campo">
-        <span className="text-label">Estimativa (pontos)</span>
-        <div className="pontos-seletor">
-          {PONTOS.map((p) => {
-            const estimativaStr = dados.estimativa === '' || dados.estimativa == null ? '?' : String(dados.estimativa)
-            return (
-              <button
-                key={p}
-                type="button"
-                data-ativo={estimativaStr === p}
-                onClick={() => escolherPontos(p)}
-              >
-                {p}
-              </button>
-            )
-          })}
+        <span className="text-label">Fase</span>
+        <div className="fase-selector">
+          {FASES.map((f) => (
+            <button
+              key={f}
+              type="button"
+              className="fase-option"
+              data-ativo={dados.fase === f}
+              onClick={() => atualizar('fase', f)}
+            >
+              <span className="fase-ponto" data-fase={f} aria-hidden="true" />
+              {ROTULO_FASE[f]}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="campo-grade-2">
-        <label className="campo">
-          <span className="text-label">Data de início</span>
-          <input type="date" value={dados.data_inicio} onChange={(e) => atualizar('data_inicio', e.target.value)} />
-        </label>
-        <label className="campo">
-          <span className="text-label">Data fim</span>
-          <input type="date" value={dados.data_fim} onChange={(e) => atualizar('data_fim', e.target.value)} />
-        </label>
-      </div>
+      <button
+        type="button"
+        className="link-acao toggle-detalhes"
+        onClick={() => setDetalhesAbertos((v) => !v)}
+        aria-expanded={detalhesAbertos}
+      >
+        {detalhesAbertos ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        Detalhes opcionais
+      </button>
 
-      <label className="campo">
-        <span className="text-label">Link do Jira</span>
-        <input type="url" value={dados.link_jira} onChange={(e) => atualizar('link_jira', e.target.value)} placeholder="https://...atlassian.net/browse/..." />
-      </label>
+      {detalhesAbertos && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+          <label className="campo">
+            <span className="text-label">Objetivo</span>
+            <textarea rows={2} value={dados.objetivo} onChange={(e) => atualizar('objetivo', e.target.value)} />
+          </label>
 
-      {inicial?.id && (
-        <details>
-          <summary className="text-label" style={{ cursor: 'pointer' }}>
-            Histórico {historico ? `(${historico.length})` : ''}
-          </summary>
-          <div style={{ marginTop: 'var(--space-sm)' }}>
-            <HistoricoDemanda movimentos={historico} />
+          <div className="campo-grade-2">
+            <label className="campo">
+              <span className="text-label">OKR</span>
+              <input value={dados.okr} onChange={(e) => atualizar('okr', e.target.value)} />
+            </label>
+            <label className="campo">
+              <span className="text-label">Ganho</span>
+              <input value={dados.ganho} onChange={(e) => atualizar('ganho', e.target.value)} />
+            </label>
           </div>
-        </details>
+
+          <div className="campo-grade-2">
+            <label className="campo">
+              <span className="text-label">Responsável</span>
+              <input value={dados.responsavel} onChange={(e) => atualizar('responsavel', e.target.value)} />
+            </label>
+            <label className="campo">
+              <span className="text-label">Estimativa (pts)</span>
+              <input type="number" value={dados.estimativa} onChange={(e) => atualizar('estimativa', e.target.value)} />
+            </label>
+          </div>
+
+          <div className="campo-grade-2">
+            <label className="campo">
+              <span className="text-label">Data de início</span>
+              <input type="date" value={dados.data_inicio} onChange={(e) => atualizar('data_inicio', e.target.value)} />
+            </label>
+            <label className="campo">
+              <span className="text-label">Data fim</span>
+              <input type="date" value={dados.data_fim} onChange={(e) => atualizar('data_fim', e.target.value)} />
+            </label>
+          </div>
+
+          <label className="campo">
+            <span className="text-label">Link do Jira</span>
+            <input type="url" value={dados.link_jira} onChange={(e) => atualizar('link_jira', e.target.value)} placeholder="https://...atlassian.net/browse/..." />
+          </label>
+        </div>
       )}
 
       <div className="modal-rodape">
@@ -198,8 +175,8 @@ export default function FormDemanda({ inicial, historico, onSalvar, onExcluir, o
 
         <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
           <button type="button" className="btn-secundario" onClick={onCancelar}>Cancelar</button>
-          <button type="submit" className="btn-primario" disabled={enviando}>
-            {enviando ? 'Salvando...' : 'Salvar'}
+          <button type="submit" className="btn-primario" disabled={enviando || !dados.nome.trim() || !dados.resumo.trim()}>
+            {enviando ? 'Salvando...' : inicial ? 'Salvar' : 'Criar demanda'}
           </button>
         </div>
       </div>

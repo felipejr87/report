@@ -1,26 +1,27 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
+import { buscarProximosPassosPendentes, concluirAcao } from '../lib/timeline'
 import Header from '../components/Header'
 import FiltroProjeto from '../components/FiltroProjeto'
 import CardDemanda from '../components/CardDemanda'
 import FormDemanda from '../components/FormDemanda'
 import Modal from '../components/Modal'
 import EstadoVazio from '../components/EstadoVazio'
-import { ROTULO_FASE } from '../components/ChipFase'
 
 export default function Espaco() {
   const { sessao, sair } = useAuth()
   const toast = useToast()
+  const navigate = useNavigate()
+
   const [demandas, setDemandas] = useState([])
+  const [proximosPassos, setProximosPassos] = useState({})
   const [filtroProjeto, setFiltroProjeto] = useState('todos')
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
-  const [editando, setEditando] = useState(null) // demanda em edição, ou {} para nova, ou null
-  const [mostrarForm, setMostrarForm] = useState(false)
-  const [historico, setHistorico] = useState(null)
+  const [mostrarNova, setMostrarNova] = useState(false)
 
   const cliente = sessao ? supabaseEspaco(sessao.token) : null
 
@@ -28,6 +29,7 @@ export default function Espaco() {
     if (!cliente) return
     setCarregando(true)
     setErro('')
+
     const { data, error } = await cliente
       .from('demandas')
       .select('*')
@@ -35,8 +37,17 @@ export default function Espaco() {
 
     if (error) {
       setErro(error.message)
+      setCarregando(false)
+      return
+    }
+
+    setDemandas(data)
+
+    if (data.length) {
+      const mapa = await buscarProximosPassosPendentes(cliente, data.map((d) => d.id))
+      setProximosPassos(mapa)
     } else {
-      setDemandas(data)
+      setProximosPassos({})
     }
     setCarregando(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,114 +57,42 @@ export default function Espaco() {
 
   if (!sessao) return <Navigate to="/" replace />
 
-  const demandasFiltradas = demandas
-    .filter((d) => filtroProjeto === 'todos' || d.projeto === filtroProjeto)
+  const demandasFiltradas = demandas.filter(
+    (d) => filtroProjeto === 'todos' || d.projeto === filtroProjeto
+  )
 
-  function abrirNova() {
-    setEditando({})
-    setMostrarForm(true)
-  }
-
-  async function abrirEdicao(demanda) {
-    setEditando(demanda)
-    setMostrarForm(true)
-    setHistorico(null)
-
+  async function criar(dados) {
     const { data, error } = await cliente
-      .from('movimentos')
-      .select('id, tipo, detalhe, criado_em')
-      .eq('demanda_id', demanda.id)
-      .order('criado_em', { ascending: false })
-
-    if (!error) setHistorico(data)
-  }
-
-  function fecharForm() {
-    setMostrarForm(false)
-    setEditando(null)
-    setHistorico(null)
-  }
-
-  async function salvar(dados) {
-    if (editando && editando.id) {
-      const { error } = await cliente
-        .from('demandas')
-        .update({ ...dados, atualizado_em: new Date().toISOString() })
-        .eq('id', editando.id)
-      if (error) throw error
-
-      await cliente.from('movimentos').insert({
-        demanda_id: editando.id,
-        tipo: 'edicao',
-        detalhe: dados,
-      })
-      toast?.sucesso('Demanda atualizada.')
-    } else {
-      const { data, error } = await cliente
-        .from('demandas')
-        .insert({ ...dados, espaco_id: sessao.espaco.id })
-        .select()
-        .single()
-      if (error) throw error
-
-      await cliente.from('movimentos').insert({
-        demanda_id: data.id,
-        tipo: 'criacao',
-        detalhe: dados,
-      })
-      toast?.sucesso('Demanda criada.')
-    }
-
-    fecharForm()
-    await carregar()
-  }
-
-  async function excluir() {
-    const { error } = await cliente.from('demandas').delete().eq('id', editando.id)
+      .from('demandas')
+      .insert({ ...dados, espaco_id: sessao.espaco.id })
+      .select()
+      .single()
     if (error) throw error
-    toast?.sucesso('Demanda excluída.')
-    fecharForm()
+
+    await cliente.from('movimentos').insert({
+      demanda_id: data.id,
+      tipo: 'criacao',
+      detalhe: { texto: 'Demanda criada' },
+    })
+
+    toast?.sucesso('Demanda criada.')
+    setMostrarNova(false)
     await carregar()
   }
 
-  async function mudarFase(demanda, novaFase) {
-    if (novaFase === demanda.fase) return
-
-    const { error } = await cliente
-      .from('demandas')
-      .update({ fase: novaFase, atualizado_em: new Date().toISOString() })
-      .eq('id', demanda.id)
-    if (error) { toast?.erro(error.message); return }
-
-    await cliente.from('movimentos').insert({
-      demanda_id: demanda.id,
-      tipo: 'fase',
-      detalhe: { de: demanda.fase, para: novaFase },
-    })
-
-    toast?.sucesso(`Movido para ${ROTULO_FASE[novaFase]}.`)
-    await carregar()
-  }
-
-  async function concluirPasso(demanda, feito) {
-    const { error } = await cliente
-      .from('demandas')
-      .update({ proximo_passo_feito: feito, atualizado_em: new Date().toISOString() })
-      .eq('id', demanda.id)
-    if (error) { toast?.erro(error.message); return }
-
-    await cliente.from('movimentos').insert({
-      demanda_id: demanda.id,
-      tipo: 'edicao',
-      detalhe: { proximo_passo_feito: feito },
-    })
-
-    await carregar()
+  async function concluirPasso(movimento, demandaId) {
+    try {
+      await concluirAcao(cliente, movimento.id, demandaId)
+      toast?.sucesso('Passo concluído.')
+      await carregar()
+    } catch (err) {
+      toast?.erro(err.message)
+    }
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-      <Header espaco={sessao.espaco} onNova={abrirNova} onSair={sair} />
+    <div style={{ maxWidth: 760, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+      <Header espaco={sessao.espaco} onNova={() => setMostrarNova(true)} onSair={sair} />
 
       <div className="layout-espaco">
         <FiltroProjeto demandas={demandas} filtro={filtroProjeto} onFiltroChange={setFiltroProjeto} />
@@ -163,25 +102,24 @@ export default function Espaco() {
         {carregando ? (
           <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
         ) : demandasFiltradas.length === 0 ? (
-          <EstadoVazio onCriar={abrirNova} />
+          <EstadoVazio onCriar={() => setMostrarNova(true)} />
         ) : (
           <div className="lista-demandas">
             {demandasFiltradas.map((d) => (
-              <CardDemanda key={d.id} demanda={d} onEditar={abrirEdicao} onMudarFase={mudarFase} onConcluirPasso={concluirPasso} />
+              <CardDemanda
+                key={d.id}
+                demanda={{ ...d, proximoPasso: proximosPassos[d.id] }}
+                onConcluirPasso={concluirPasso}
+                onClick={() => navigate(`/espaco/demanda/${d.id}`)}
+              />
             ))}
           </div>
         )}
       </div>
 
-      {mostrarForm && (
-        <Modal titulo={editando?.id ? 'Editar demanda' : 'Nova demanda'} onFechar={fecharForm}>
-          <FormDemanda
-            inicial={editando?.id ? editando : null}
-            historico={historico}
-            onSalvar={salvar}
-            onExcluir={editando?.id ? excluir : undefined}
-            onCancelar={fecharForm}
-          />
+      {mostrarNova && (
+        <Modal titulo="Nova demanda" onFechar={() => setMostrarNova(false)}>
+          <FormDemanda onSalvar={criar} onCancelar={() => setMostrarNova(false)} />
         </Modal>
       )}
     </div>
