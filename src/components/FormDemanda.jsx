@@ -7,12 +7,14 @@ const PONTOS = ['1', '2', '3', '5', '8', '13', '21', '?']
 
 const VAZIO = {
   nome: '',
+  projeto: '',
   resumo: '',
   objetivo: '',
   okr: '',
   ganho: '',
   fase: 'discovery',
   proximo_passo: '',
+  proximo_passo_feito: false,
   responsavel: '',
   estimativa: '',
   link_jira: '',
@@ -87,6 +89,11 @@ export default function FormDemanda({ inicial, historico, onSalvar, onExcluir, o
       </label>
 
       <label className="campo">
+        <span className="text-label">Projeto / Tema</span>
+        <input value={dados.projeto} onChange={(e) => atualizar('projeto', e.target.value)} placeholder="Ex: Entendimento de Fatura - Loja" />
+      </label>
+
+      <label className="campo">
         <span className="text-label">Resumo *</span>
         <textarea value={dados.resumo} onChange={(e) => atualizar('resumo', e.target.value)} rows={2} data-erro={!!erro && !dados.resumo.trim()} required />
       </label>
@@ -123,6 +130,16 @@ export default function FormDemanda({ inicial, historico, onSalvar, onExcluir, o
       <label className="campo">
         <span className="text-label">Próximo passo</span>
         <input value={dados.proximo_passo} onChange={(e) => atualizar('proximo_passo', e.target.value)} />
+      </label>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={dados.proximo_passo_feito}
+          onChange={(e) => atualizar('proximo_passo_feito', e.target.checked)}
+          style={{ width: 14, height: 14 }}
+        />
+        <span className="text-body">Próximo passo já concluído</span>
       </label>
 
       <div className="campo">

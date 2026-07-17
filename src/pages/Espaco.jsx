@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import Header from '../components/Header'
 import FiltroFase from '../components/FiltroFase'
+import FiltroProjeto from '../components/FiltroProjeto'
 import CardDemanda from '../components/CardDemanda'
 import FormDemanda from '../components/FormDemanda'
 import Modal from '../components/Modal'
@@ -16,6 +17,7 @@ export default function Espaco() {
   const toast = useToast()
   const [demandas, setDemandas] = useState([])
   const [filtro, setFiltro] = useState('todas')
+  const [filtroProjeto, setFiltroProjeto] = useState('todos')
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [editando, setEditando] = useState(null) // demanda em edição, ou {} para nova, ou null
@@ -46,9 +48,9 @@ export default function Espaco() {
 
   if (!sessao) return <Navigate to="/" replace />
 
-  const demandasFiltradas = filtro === 'todas'
-    ? demandas
-    : demandas.filter((d) => d.fase === filtro)
+  const demandasFiltradas = demandas
+    .filter((d) => filtro === 'todas' || d.fase === filtro)
+    .filter((d) => filtroProjeto === 'todos' || d.projeto === filtroProjeto)
 
   function abrirNova() {
     setEditando({})
@@ -136,13 +138,30 @@ export default function Espaco() {
     await carregar()
   }
 
+  async function concluirPasso(demanda, feito) {
+    const { error } = await cliente
+      .from('demandas')
+      .update({ proximo_passo_feito: feito, atualizado_em: new Date().toISOString() })
+      .eq('id', demanda.id)
+    if (error) { toast?.erro(error.message); return }
+
+    await cliente.from('movimentos').insert({
+      demanda_id: demanda.id,
+      tipo: 'edicao',
+      detalhe: { proximo_passo_feito: feito },
+    })
+
+    await carregar()
+  }
+
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
       <Header espaco={sessao.espaco} onNova={abrirNova} onSair={sair} />
 
       <div className="layout-espaco">
-        <div className="sidebar-filtros">
+        <div className="sidebar-filtros" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
           <FiltroFase demandas={demandas} filtro={filtro} onFiltroChange={setFiltro} />
+          <FiltroProjeto demandas={demandas} filtro={filtroProjeto} onFiltroChange={setFiltroProjeto} />
         </div>
 
         <div className="conteudo-principal">
@@ -155,7 +174,7 @@ export default function Espaco() {
           ) : (
             <div className="lista-demandas">
               {demandasFiltradas.map((d) => (
-                <CardDemanda key={d.id} demanda={d} onEditar={abrirEdicao} onMudarFase={mudarFase} />
+                <CardDemanda key={d.id} demanda={d} onEditar={abrirEdicao} onMudarFase={mudarFase} onConcluirPasso={concluirPasso} />
               ))}
             </div>
           )}

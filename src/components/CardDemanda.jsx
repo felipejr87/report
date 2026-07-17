@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { ArrowRight, Pencil, User, Tag, ExternalLink } from 'lucide-react'
+import { ArrowRight, Pencil, User, Tag, ExternalLink, CheckCircle2 } from 'lucide-react'
 import BadgeParado from './BadgeParado'
 import ChipFase, { FASES, ROTULO_FASE } from './ChipFase'
 
-export default function CardDemanda({ demanda, onEditar, onMudarFase }) {
+export default function CardDemanda({ demanda, onEditar, onMudarFase, onConcluirPasso }) {
   const [mostrarSeletor, setMostrarSeletor] = useState(false)
+  const passoFeito = !!demanda.proximo_passo_feito
 
   return (
     <div className="card-demanda" data-fase={demanda.fase}>
@@ -26,6 +27,10 @@ export default function CardDemanda({ demanda, onEditar, onMudarFase }) {
         </div>
       </div>
 
+      {demanda.projeto && (
+        <span className="text-micro">{demanda.projeto}</span>
+      )}
+
       <h3
         className="text-card-title"
         style={{ cursor: 'pointer' }}
@@ -35,10 +40,27 @@ export default function CardDemanda({ demanda, onEditar, onMudarFase }) {
       </h3>
 
       {demanda.proximo_passo && (
-        <div style={{ borderTop: '1px solid var(--line)', paddingTop: 'var(--space-sm)', display: 'flex', gap: 'var(--space-xs)', alignItems: 'flex-start' }}>
-          <ArrowRight size={14} color="var(--text-dim)" style={{ marginTop: 3, flexShrink: 0 }} />
-          <span className="text-body" style={{ fontWeight: 500 }}>{demanda.proximo_passo}</span>
-        </div>
+        <label
+          style={{ borderTop: '1px solid var(--line)', paddingTop: 'var(--space-sm)', display: 'flex', gap: 'var(--space-xs)', alignItems: 'flex-start', cursor: 'pointer' }}
+        >
+          <input
+            type="checkbox"
+            checked={passoFeito}
+            onChange={(e) => onConcluirPasso(demanda, e.target.checked)}
+            style={{ marginTop: 3, flexShrink: 0, width: 14, height: 14 }}
+            aria-label={`Marcar próximo passo de ${demanda.nome} como feito`}
+          />
+          <span
+            className="text-body"
+            style={{
+              fontWeight: 500,
+              textDecoration: passoFeito ? 'line-through' : 'none',
+              color: passoFeito ? 'var(--text-dim)' : 'var(--text)',
+            }}
+          >
+            {demanda.proximo_passo}
+          </span>
+        </label>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
@@ -53,6 +75,18 @@ export default function CardDemanda({ demanda, onEditar, onMudarFase }) {
           )}
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+          {demanda.fase !== 'entregue' && (
+            <button
+              type="button"
+              className="btn-ghost"
+              style={{ padding: 6 }}
+              onClick={() => onMudarFase(demanda, 'entregue')}
+              aria-label={`Concluir ${demanda.nome}`}
+              title="Concluir demanda"
+            >
+              <CheckCircle2 size={14} />
+            </button>
+          )}
           <button
             type="button"
             className="btn-ghost"
