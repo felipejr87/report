@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Trash2, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { FASES, ROTULO_FASE } from './ChipFase'
+import { idsSucessoras } from '../lib/timeline'
 
 const VAZIO = {
   nome: '',
@@ -15,9 +16,10 @@ const VAZIO = {
   link_jira: '',
   data_inicio: '',
   data_fim: '',
+  predecessora_id: '',
 }
 
-export default function FormDemanda({ inicial, onSalvar, onExcluir, onCancelar }) {
+export default function FormDemanda({ inicial, outrasDemandas = [], onSalvar, onExcluir, onCancelar }) {
   const [dados, setDados] = useState(inicial ? { ...VAZIO, ...inicial } : VAZIO)
   const [detalhesAbertos, setDetalhesAbertos] = useState(false)
   const [erro, setErro] = useState('')
@@ -45,6 +47,7 @@ export default function FormDemanda({ inicial, onSalvar, onExcluir, onCancelar }
         link_jira: dados.link_jira === '' ? null : dados.link_jira,
         data_inicio: dados.data_inicio === '' ? null : dados.data_inicio,
         data_fim: dados.data_fim === '' ? null : dados.data_fim,
+        predecessora_id: dados.predecessora_id === '' ? null : dados.predecessora_id,
       })
     } catch (err) {
       setErro(err.message || 'Erro ao salvar.')
@@ -63,6 +66,12 @@ export default function FormDemanda({ inicial, onSalvar, onExcluir, onCancelar }
       setExcluindo(false)
     }
   }
+
+  // Exclui a própria demanda e suas sucessoras (evita ciclo A→B→A)
+  const idsInvalidos = inicial?.id
+    ? new Set([inicial.id, ...idsSucessoras(outrasDemandas, inicial.id)])
+    : new Set()
+  const opcoesPredecessora = outrasDemandas.filter((d) => !idsInvalidos.has(d.id))
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
@@ -161,6 +170,16 @@ export default function FormDemanda({ inicial, onSalvar, onExcluir, onCancelar }
           <label className="campo">
             <span className="text-label">Link do Jira</span>
             <input type="url" value={dados.link_jira} onChange={(e) => atualizar('link_jira', e.target.value)} placeholder="https://...atlassian.net/browse/..." />
+          </label>
+
+          <label className="campo">
+            <span className="text-label">Depende de</span>
+            <select value={dados.predecessora_id} onChange={(e) => atualizar('predecessora_id', e.target.value)}>
+              <option value="">Nenhuma</option>
+              {opcoesPredecessora.map((d) => (
+                <option key={d.id} value={d.id}>{d.nome}</option>
+              ))}
+            </select>
           </label>
         </div>
       )}

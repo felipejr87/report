@@ -17,6 +17,7 @@ export default function Demanda() {
 
   const [demanda, setDemanda] = useState(null)
   const [movimentos, setMovimentos] = useState([])
+  const [outrasDemandas, setOutrasDemandas] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [novoPasso, setNovoPasso] = useState('')
@@ -31,16 +32,18 @@ export default function Demanda() {
     setCarregando(true)
     setErro('')
 
-    const [{ data: d, error: eD }, { data: m, error: eM }] = await Promise.all([
+    const [{ data: d, error: eD }, { data: m, error: eM }, { data: outras, error: eO }] = await Promise.all([
       cliente.from('demandas').select('*').eq('id', id).single(),
       cliente.from('movimentos').select('*').eq('demanda_id', id).order('criado_em', { ascending: false }),
+      cliente.from('demandas').select('id, nome, predecessora_id'),
     ])
 
-    if (eD || eM) {
-      setErro((eD || eM).message)
+    if (eD || eM || eO) {
+      setErro((eD || eM || eO).message)
     } else {
       setDemanda(d)
       setMovimentos(m || [])
+      setOutrasDemandas((outras || []).filter((o) => o.id !== id))
     }
     setCarregando(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,6 +52,9 @@ export default function Demanda() {
   useEffect(() => { carregar() }, [carregar])
 
   if (!sessao) return <Navigate to="/" replace />
+
+  const predecessora = outrasDemandas.find((o) => o.id === demanda?.predecessora_id)
+  const sucessoras = outrasDemandas.filter((o) => o.predecessora_id === id)
 
   const proximoPasso = movimentos.find((m) => m.tipo === 'acao_planejada' && m.status === 'pendente')
   const feitos = movimentos
@@ -162,6 +168,23 @@ export default function Demanda() {
           {demanda.responsavel && <span><span className="meta-label">Responsável</span> {demanda.responsavel}</span>}
           {demanda.estimativa != null && <span><span className="meta-label">Estimativa</span> {demanda.estimativa} pts</span>}
           {demanda.link_jira && <span><a href={demanda.link_jira} target="_blank" rel="noreferrer" className="link-acao">Ver no Jira</a></span>}
+          {predecessora && (
+            <span>
+              <span className="meta-label">Depende de</span>
+              <Link to={`/espaco/demanda/${predecessora.id}`} className="link-acao">{predecessora.nome}</Link>
+            </span>
+          )}
+          {sucessoras.length > 0 && (
+            <span>
+              <span className="meta-label">Bloqueia</span>
+              {sucessoras.map((s, i) => (
+                <span key={s.id}>
+                  {i > 0 && ', '}
+                  <Link to={`/espaco/demanda/${s.id}`} className="link-acao">{s.nome}</Link>
+                </span>
+              ))}
+            </span>
+          )}
         </div>
       </section>
 
@@ -222,6 +245,7 @@ export default function Demanda() {
         <Modal titulo="Editar demanda" onFechar={() => setMostrarEditar(false)}>
           <FormDemanda
             inicial={demanda}
+            outrasDemandas={outrasDemandas}
             onSalvar={handleSalvarEdicao}
             onExcluir={handleExcluir}
             onCancelar={() => setMostrarEditar(false)}

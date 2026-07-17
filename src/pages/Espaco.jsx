@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, Link } from 'react-router-dom'
 import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
@@ -95,7 +95,14 @@ export default function Espaco() {
       <Header espaco={sessao.espaco} onNova={() => setMostrarNova(true)} onSair={sair} />
 
       <div className="layout-espaco">
-        <FiltroProjeto demandas={demandas} filtro={filtroProjeto} onFiltroChange={setFiltroProjeto} />
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+          <FiltroProjeto demandas={demandas} filtro={filtroProjeto} onFiltroChange={setFiltroProjeto} />
+          {filtroProjeto !== 'todos' && (
+            <Link to={`/espaco/timeline?projeto=${encodeURIComponent(filtroProjeto)}`} className="link-acao">
+              Ver timeline
+            </Link>
+          )}
+        </div>
 
         {erro && <p role="alert" className="campo-erro">{erro}</p>}
 
@@ -119,7 +126,7 @@ export default function Espaco() {
 
       {mostrarNova && (
         <Modal titulo="Nova demanda" onFechar={() => setMostrarNova(false)}>
-          <FormDemanda onSalvar={criar} onCancelar={() => setMostrarNova(false)} />
+          <FormDemanda outrasDemandas={demandas} onSalvar={criar} onCancelar={() => setMostrarNova(false)} />
         </Modal>
       )}
     </div>

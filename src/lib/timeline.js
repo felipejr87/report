@@ -73,3 +73,50 @@ export function gerarReportTexto(demanda, movimentos) {
 
   return linhas.join('\n').trim()
 }
+
+// IDs de todas as demandas que dependem (direta ou transitivamente) de `id`.
+// Usado pra impedir escolher uma sucessora como predecessora (ciclo).
+export function idsSucessoras(demandas, id) {
+  const diretas = demandas.filter((d) => d.predecessora_id === id).map((d) => d.id)
+  const todas = new Set(diretas)
+  for (const sucessoraId of diretas) {
+    for (const neta of idsSucessoras(demandas, sucessoraId)) todas.add(neta)
+  }
+  return todas
+}
+
+const UM_DIA_MS = 24 * 60 * 60 * 1000
+
+// Calcula posição/largura (em %) de cada demanda com data para desenhar um Gantt simples.
+export function calcularGantt(demandas) {
+  const comData = demandas.filter((d) => d.data_inicio)
+  const semData = demandas.filter((d) => !d.data_inicio)
+
+  if (comData.length === 0) return { itens: [], semData, inicio: null, fim: null }
+
+  const hoje = new Date()
+  const datas = comData.flatMap((d) => [
+    new Date(d.data_inicio),
+    new Date(d.data_fim || hoje),
+  ])
+  let inicio = new Date(Math.min(...datas))
+  let fim = new Date(Math.max(...datas.concat(hoje)))
+
+  // margem de 1 dia em cada ponta pra barras não colarem na borda
+  inicio = new Date(inicio.getTime() - UM_DIA_MS)
+  fim = new Date(fim.getTime() + UM_DIA_MS)
+  const duracaoTotal = fim.getTime() - inicio.getTime()
+
+  const itens = comData
+    .slice()
+    .sort((a, b) => new Date(a.data_inicio) - new Date(b.data_inicio))
+    .map((d) => {
+      const ini = new Date(d.data_inicio)
+      const dFim = d.data_fim ? new Date(d.data_fim) : hoje
+      const offset = ((ini.getTime() - inicio.getTime()) / duracaoTotal) * 100
+      const largura = Math.max(((dFim.getTime() - ini.getTime()) / duracaoTotal) * 100, 1)
+      return { demanda: d, offsetPct: offset, larguraPct: largura, semDataFim: !d.data_fim }
+    })
+
+  return { itens, semData, inicio, fim }
+}
