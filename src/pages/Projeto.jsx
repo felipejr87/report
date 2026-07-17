@@ -90,6 +90,13 @@ export default function Projeto() {
     await carregar()
   }
 
+  async function excluirProjeto() {
+    const { error } = await cliente.from('projetos').delete().eq('id', id)
+    if (error) throw error
+    toast?.sucesso('Projeto excluído.')
+    navigate('/espaco')
+  }
+
   async function concluirPasso(movimento, atividadeId) {
     try {
       await concluirAcao(cliente, movimento.id, atividadeId, usuario)
@@ -172,7 +179,13 @@ export default function Projeto() {
 
       {mostrarEditarProjeto && (
         <Modal titulo="Editar projeto" onFechar={() => setMostrarEditarProjeto(false)}>
-          <FormProjeto inicial={projeto} onSalvar={salvarProjeto} onCancelar={() => setMostrarEditarProjeto(false)} />
+          <FormProjeto
+            inicial={projeto}
+            totalAtividades={atividades.length}
+            onSalvar={salvarProjeto}
+            onExcluir={excluirProjeto}
+            onCancelar={() => setMostrarEditarProjeto(false)}
+          />
         </Modal>
       )}
     </div>

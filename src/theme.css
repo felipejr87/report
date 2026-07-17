@@ -180,6 +180,23 @@ input::placeholder, textarea::placeholder {
   font-size: 13px;
 }
 
+.campo-busca {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border-bottom: 1px solid var(--line);
+  padding: var(--space-sm) 2px;
+  transition: border-color var(--ease);
+}
+.campo-busca:focus-within { border-bottom-color: var(--text); }
+.campo-busca input {
+  flex: 1;
+  border: none;
+  padding: 0;
+}
+.campo-busca input:focus { border: none; }
+.campo-busca input[type="search"]::-webkit-search-cancel-button { display: none; }
+
 /* =============================================
    Botões
    ============================================= */

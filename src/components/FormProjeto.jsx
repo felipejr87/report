@@ -1,13 +1,16 @@
 import { useState } from 'react'
-import { X, Flame, ChevronDown, ChevronUp } from 'lucide-react'
+import { X, Flame, ChevronDown, ChevronUp, Trash2, AlertTriangle } from 'lucide-react'
 
 const VAZIO = { nome: '', data_entrega: '', quente: false, objetivo: '', okr: '', ganho: '' }
 
-export default function FormProjeto({ inicial, onSalvar, onCancelar }) {
+export default function FormProjeto({ inicial, totalAtividades = 0, onSalvar, onExcluir, onCancelar }) {
   const [dados, setDados] = useState(inicial ? { ...VAZIO, ...inicial } : VAZIO)
   const [detalhesAbertos, setDetalhesAbertos] = useState(false)
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false)
+  const [textoConfirmacao, setTextoConfirmacao] = useState('')
+  const [excluindo, setExcluindo] = useState(false)
 
   function atualizar(campo, valor) {
     setDados((d) => ({ ...d, [campo]: valor }))
@@ -32,6 +35,19 @@ export default function FormProjeto({ inicial, onSalvar, onCancelar }) {
       setErro(err.message || 'Erro ao salvar.')
     } finally {
       setEnviando(false)
+    }
+  }
+
+  const nomeConfere = textoConfirmacao.trim().toLowerCase() === dados.nome.trim().toLowerCase()
+
+  async function handleExcluirDefinitivo() {
+    if (!nomeConfere) return
+    setExcluindo(true)
+    try {
+      await onExcluir()
+    } catch (err) {
+      setErro(err.message || 'Erro ao excluir.')
+      setExcluindo(false)
     }
   }
 
@@ -96,15 +112,53 @@ export default function FormProjeto({ inicial, onSalvar, onCancelar }) {
         </div>
       )}
 
-      <div className="modal-rodape">
-        <span />
-        <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-          <button type="button" className="btn-secundario" onClick={onCancelar}>Cancelar</button>
-          <button type="submit" className="btn-primario" disabled={enviando || !dados.nome.trim()}>
-            {enviando ? 'Salvando...' : inicial ? 'Salvar' : 'Criar projeto'}
-          </button>
+      {confirmandoExclusao ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', borderTop: '1px solid var(--line)', paddingTop: 'var(--space-md)' }}>
+          <p className="text-body" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--atencao)' }}>
+            <AlertTriangle size={16} />
+            {totalAtividades > 0
+              ? `Essa ação apaga o projeto E as ${totalAtividades} atividade${totalAtividades > 1 ? 's' : ''} dentro dele. Não pode ser desfeita.`
+              : 'Essa ação não pode ser desfeita.'}
+          </p>
+          <label className="campo">
+            <span className="text-label">Digite &quot;{dados.nome}&quot; pra confirmar</span>
+            <input value={textoConfirmacao} onChange={(e) => setTextoConfirmacao(e.target.value)} autoFocus />
+          </label>
+          <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+            <button
+              type="button"
+              className="btn-secundario"
+              onClick={() => { setConfirmandoExclusao(false); setTextoConfirmacao('') }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn-perigo"
+              onClick={handleExcluirDefinitivo}
+              disabled={!nomeConfere || excluindo}
+            >
+              {excluindo ? 'Excluindo...' : 'Excluir definitivamente'}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="modal-rodape">
+          {inicial?.id ? (
+            <button type="button" className="btn-perigo" onClick={() => setConfirmandoExclusao(true)}>
+              <Trash2 size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
+              Excluir
+            </button>
+          ) : <span />}
+
+          <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+            <button type="button" className="btn-secundario" onClick={onCancelar}>Cancelar</button>
+            <button type="submit" className="btn-primario" disabled={enviando || !dados.nome.trim()}>
+              {enviando ? 'Salvando...' : inicial ? 'Salvar' : 'Criar projeto'}
+            </button>
+          </div>
+        </div>
+      )}
     </form>
   )
 }
