@@ -4,6 +4,12 @@ import Espaco from './pages/Espaco'
 import Projeto from './pages/Projeto'
 import Atividade from './pages/Atividade'
 import Timeline from './pages/Timeline'
+import JarvisRoute from './components/JarvisRoute'
+import Pilares from './pages/jarvis/Pilares'
+import Financeiro from './pages/jarvis/Financeiro'
+import Calendario from './pages/jarvis/Calendario'
+import Habitos from './pages/jarvis/Habitos'
+import Brief from './pages/jarvis/Brief'
 
 export default function App() {
   return (
@@ -13,6 +19,12 @@ export default function App() {
       <Route path="/espaco/projeto/:id" element={<Projeto />} />
       <Route path="/espaco/atividade/:id" element={<Atividade />} />
       <Route path="/espaco/timeline/:id" element={<Timeline />} />
+
+      <Route path="/jarvis/pilares" element={<JarvisRoute><Pilares /></JarvisRoute>} />
+      <Route path="/jarvis/financeiro" element={<JarvisRoute><Financeiro /></JarvisRoute>} />
+      <Route path="/jarvis/calendario" element={<JarvisRoute><Calendario /></JarvisRoute>} />
+      <Route path="/jarvis/habitos" element={<JarvisRoute><Habitos /></JarvisRoute>} />
+      <Route path="/jarvis/brief" element={<JarvisRoute><Brief /></JarvisRoute>} />
     </Routes>
   )
 }

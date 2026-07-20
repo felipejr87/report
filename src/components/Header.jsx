@@ -1,21 +1,28 @@
 import ThemeToggle from './ThemeToggle'
 import UsuarioBadge from './UsuarioBadge'
+import JarvisNav from './JarvisNav'
 
 export default function Header({ espaco, onSair }) {
-  return (
-    <header className="app-header">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', minWidth: 0 }}>
-        <span className="logo esconder-mobile">
-          Jarvis<span className="brand-mark">!</span>
-        </span>
-        <span className="chip-codigo">{espaco.codigo}</span>
-      </div>
+  const isJarvis = espaco?.jarvis_enabled === true
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-        <UsuarioBadge />
-        <ThemeToggle />
-        <button type="button" className="link-acao" onClick={onSair}>Sair</button>
-      </div>
-    </header>
+  return (
+    <>
+      <header className="app-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', minWidth: 0 }}>
+          <span className="logo esconder-mobile">
+            Jarvis<span className="brand-mark">!</span>
+          </span>
+          <span className="chip-codigo">{espaco.codigo}</span>
+          {isJarvis && <span className="chip-jarvis">Jarvis</span>}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+          <UsuarioBadge />
+          <ThemeToggle />
+          <button type="button" className="link-acao" onClick={onSair}>Sair</button>
+        </div>
+      </header>
+      {isJarvis && <JarvisNav />}
+    </>
   )
 }
