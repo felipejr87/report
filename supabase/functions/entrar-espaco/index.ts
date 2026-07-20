@@ -61,7 +61,7 @@ serve(async (req) => {
     // Buscar espaço pelo código (service role — bypass RLS)
     const { data: espaco, error } = await supabase
       .from('espacos')
-      .select('id, nome, senha_hash')
+      .select('id, nome, senha_hash, jarvis_enabled')
       .eq('codigo', codigo.toUpperCase().trim())
       .single()
 
@@ -122,7 +122,7 @@ serve(async (req) => {
     )
 
     return new Response(
-      JSON.stringify({ ok: true, token, espaco: { id: espaco.id, nome: espaco.nome, codigo } }),
+      JSON.stringify({ ok: true, token, espaco: { id: espaco.id, nome: espaco.nome, codigo, jarvis_enabled: espaco.jarvis_enabled === true } }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
