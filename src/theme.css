@@ -80,6 +80,19 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* input/select/textarea vão a 16px na regra base mais abaixo (linha
+   ~174) — é o valor que precisa vencer o cascade pra evitar zoom no
+   iOS. texto-pequeno permite reduzir visualmente sem cair abaixo de
+   16px de novo. touch-action remove o delay de 300ms + double-tap-zoom. */
+input.texto-pequeno {
+  font-size: 16px;
+  transform: scale(0.875);
+  transform-origin: left center;
+}
+* {
+  touch-action: manipulation;
+}
+
 html, body, #root { height: 100%; }
 
 body {
@@ -162,7 +175,7 @@ input, select, textarea {
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   padding: var(--space-sm) 2px;
-  font-size: 15px;
+  font-size: 16px; /* mínimo pro iOS não dar zoom automático ao focar */
   color: var(--text);
   transition: border-color var(--ease);
 }
