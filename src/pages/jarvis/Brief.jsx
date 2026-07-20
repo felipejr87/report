@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { supabaseEspaco } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import Header from '../../components/Header'
+import CapturaRapida from '../../components/CapturaRapida'
 
 function fmt(v) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0) }
 
@@ -98,6 +99,8 @@ export default function Brief() {
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
       <Header espaco={sessao.espaco} onSair={sair} />
+
+      <CapturaRapida cliente={cliente} onConfirmado={gerarBrief} />
 
       <div>
         <h1 className="text-hero" style={{ fontSize: 28 }}>Bom dia, Felipe</h1>
