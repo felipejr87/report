@@ -958,3 +958,56 @@ a.link-acao { text-decoration-line: underline; }
   0%, 100% { box-shadow: 0 4px 16px rgba(217, 106, 91, .35); }
   50% { box-shadow: 0 4px 26px rgba(217, 106, 91, .7); }
 }
+
+/* =============================================
+   Busca universal — texto + voz, no header, todos os espaços
+   ============================================= */
+
+.busca-universal {
+  position: relative;
+}
+
+.modal-fechar[data-escutando="true"] { animation: pulso-mic-texto 1s infinite; }
+@keyframes pulso-mic-texto {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.busca-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+
+.busca-resultados {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--space-sm);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .25);
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.res-grupo { border-bottom: 1px solid var(--line); }
+.res-grupo:last-child { border-bottom: none; }
+
+.res-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-sm) 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  margin: 2px 6px;
+  transition: background var(--ease);
+}
+.res-item:hover, .res-item:focus-visible { background: var(--bg); }
+
+.res-nome { font-size: 14px; font-weight: 500; color: var(--text); }
+.res-detalhe { font-size: 13px; color: var(--text-dim); }
+.res-meta { font-size: 12px; color: var(--text-dim); }

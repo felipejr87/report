@@ -1,6 +1,7 @@
 import ThemeToggle from './ThemeToggle'
 import UsuarioBadge from './UsuarioBadge'
 import JarvisNav from './JarvisNav'
+import BuscaUniversal from './BuscaUniversal'
 
 export default function Header({ espaco, onSair }) {
   const isJarvis = espaco?.jarvis_enabled === true
@@ -22,6 +23,9 @@ export default function Header({ espaco, onSair }) {
           <button type="button" className="link-acao" onClick={onSair}>Sair</button>
         </div>
       </header>
+      <div style={{ paddingTop: 'var(--space-sm)' }}>
+        <BuscaUniversal />
+      </div>
       {isJarvis && <JarvisNav />}
     </>
   )
