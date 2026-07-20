@@ -216,6 +216,11 @@ export default function Atividade() {
         <h2 className="section-label">O que é</h2>
         <p className="text-body">{atividade.resumo}</p>
         {atividade.objetivo && <p className="text-body" style={{ color: 'var(--text-mid)' }}>{atividade.objetivo}</p>}
+        {atividade.notas && (
+          <p className="text-body" style={{ color: 'var(--text-mid)' }}>
+            <span className="meta-label">Notas</span> {atividade.notas}
+          </p>
+        )}
         <div className="detalhe-meta-grade">
           {atividade.responsavel && <span><span className="meta-label">Responsável</span> {atividade.responsavel}</span>}
           {atividade.estimativa != null && <span><span className="meta-label">Estimativa</span> {atividade.estimativa} pts</span>}

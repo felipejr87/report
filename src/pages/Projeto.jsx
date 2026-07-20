@@ -7,6 +7,7 @@ import { useToast } from '../hooks/useToast'
 import { useUsuario } from '../hooks/useUsuario'
 import { buscarProximosPassosPendentes, concluirAcao } from '../lib/timeline'
 import { ordenarAtividadesPorPrioridade } from '../lib/projeto'
+import { ROTULO_FASE_PROJETO } from '../components/ChipFase'
 import CardAtividade from '../components/CardAtividade'
 import FormAtividade from '../components/FormAtividade'
 import FormProjeto from '../components/FormProjeto'
@@ -129,6 +130,7 @@ export default function Projeto() {
           {projeto.nome}
         </h1>
         <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'center' }}>
+          <span className="text-micro">{ROTULO_FASE_PROJETO[projeto.fase] || projeto.fase}</span>
           {projeto.data_entrega && (
             <span className="text-micro">entrega {new Date(projeto.data_entrega).toLocaleDateString('pt-BR')}</span>
           )}
@@ -136,13 +138,18 @@ export default function Projeto() {
         </div>
       </div>
 
-      {(projeto.objetivo || projeto.okr || projeto.ganho) && (
+      {(projeto.resumo || projeto.objetivo || projeto.okr || projeto.ganho || projeto.pilar || projeto.data_lancamento) && (
         <section className="detalhe-secao">
           <h2 className="section-label">Sobre o épico</h2>
-          {projeto.objetivo && <p className="text-body">{projeto.objetivo}</p>}
+          {projeto.resumo && <p className="text-body">{projeto.resumo}</p>}
+          {projeto.objetivo && <p className="text-body" style={{ color: 'var(--text-mid)' }}>{projeto.objetivo}</p>}
           <div className="detalhe-meta-grade">
             {projeto.okr && <span><span className="meta-label">OKR</span> {projeto.okr}</span>}
             {projeto.ganho && <span><span className="meta-label">Ganho</span> {projeto.ganho}</span>}
+            {projeto.pilar && <span><span className="meta-label">Pilar</span> {projeto.pilar}</span>}
+            {projeto.data_lancamento && (
+              <span><span className="meta-label">Lançamento</span> {new Date(projeto.data_lancamento).toLocaleDateString('pt-BR')}</span>
+            )}
           </div>
         </section>
       )}

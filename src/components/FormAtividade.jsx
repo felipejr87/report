@@ -14,6 +14,7 @@ const VAZIO = {
   data_inicio: '',
   data_fim: '',
   predecessora_id: '',
+  notas: '',
 }
 
 export default function FormAtividade({ inicial, outrasAtividades = [], onSalvar, onExcluir, onCancelar }) {
@@ -165,6 +166,11 @@ export default function FormAtividade({ inicial, outrasAtividades = [], onSalvar
                 <option key={a.id} value={a.id}>{a.nome}</option>
               ))}
             </select>
+          </label>
+
+          <label className="campo">
+            <span className="text-label">Notas</span>
+            <textarea rows={2} value={dados.notas} onChange={(e) => atualizar('notas', e.target.value)} />
           </label>
         </div>
       )}

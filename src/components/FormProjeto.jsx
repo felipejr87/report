@@ -1,7 +1,19 @@
 import { useState } from 'react'
 import { X, Flame, ChevronDown, ChevronUp, Trash2, AlertTriangle } from 'lucide-react'
+import { FASES_PROJETO, ROTULO_FASE_PROJETO } from './ChipFase'
 
-const VAZIO = { nome: '', data_entrega: '', quente: false, objetivo: '', okr: '', ganho: '' }
+const VAZIO = {
+  nome: '',
+  resumo: '',
+  fase: 'discovery',
+  data_entrega: '',
+  data_lancamento: '',
+  quente: false,
+  objetivo: '',
+  okr: '',
+  ganho: '',
+  pilar: '',
+}
 
 export default function FormProjeto({ inicial, totalAtividades = 0, onSalvar, onExcluir, onCancelar }) {
   const [dados, setDados] = useState(inicial ? { ...VAZIO, ...inicial } : VAZIO)
@@ -30,6 +42,7 @@ export default function FormProjeto({ inicial, totalAtividades = 0, onSalvar, on
       await onSalvar({
         ...dados,
         data_entrega: dados.data_entrega === '' ? null : dados.data_entrega,
+        data_lancamento: dados.data_lancamento === '' ? null : dados.data_lancamento,
       })
     } catch (err) {
       setErro(err.message || 'Erro ao salvar.')
@@ -68,9 +81,29 @@ export default function FormProjeto({ inicial, totalAtividades = 0, onSalvar, on
       </label>
 
       <label className="campo">
-        <span className="text-label">Data de entrega</span>
-        <input type="date" value={dados.data_entrega} onChange={(e) => atualizar('data_entrega', e.target.value)} />
+        <span className="text-label">Resumo</span>
+        <textarea rows={2} value={dados.resumo} onChange={(e) => atualizar('resumo', e.target.value)} />
       </label>
+
+      <div className="campo">
+        <span className="text-label">Fase do épico</span>
+        <select value={dados.fase} onChange={(e) => atualizar('fase', e.target.value)}>
+          {FASES_PROJETO.map((f) => (
+            <option key={f} value={f}>{ROTULO_FASE_PROJETO[f]}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="campo-grade-2">
+        <label className="campo">
+          <span className="text-label">Data de entrega</span>
+          <input type="date" value={dados.data_entrega} onChange={(e) => atualizar('data_entrega', e.target.value)} />
+        </label>
+        <label className="campo">
+          <span className="text-label">Data de lançamento</span>
+          <input type="date" value={dados.data_lancamento} onChange={(e) => atualizar('data_lancamento', e.target.value)} />
+        </label>
+      </div>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', cursor: 'pointer' }}>
         <input
@@ -108,6 +141,10 @@ export default function FormProjeto({ inicial, totalAtividades = 0, onSalvar, on
           <label className="campo">
             <span className="text-label">Ganho</span>
             <input value={dados.ganho} onChange={(e) => atualizar('ganho', e.target.value)} />
+          </label>
+          <label className="campo">
+            <span className="text-label">Pilar</span>
+            <input value={dados.pilar} onChange={(e) => atualizar('pilar', e.target.value)} />
           </label>
         </div>
       )}
