@@ -73,12 +73,9 @@ export default function Entrada() {
 
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-md)' }}>
         <div style={{ width: '100%', maxWidth: 340 }}>
-          <h1 className="text-hero" style={{ marginBottom: 'var(--space-xs)' }}>
-            Jarvis<span style={{ color: 'var(--brand)' }}>!</span>
-          </h1>
-          <p className="text-micro" style={{ marginBottom: 'var(--space-lg)' }}>
-            {modo === 'entrar' ? 'sua planilha, viva' : 'Onde está cada atividade e qual o próximo passo.'}
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-lg)' }}>
+            <img src="/icons/icon-512.png" alt="Jarvis" width={120} height={120} style={{ borderRadius: '50%' }} />
+          </div>
 
           {erro && <p role="alert" className="campo-erro" style={{ marginBottom: 'var(--space-md)' }}>{erro}</p>}
 
