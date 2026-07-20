@@ -6,7 +6,7 @@ export default function Header({ espaco, onSair }) {
     <header className="app-header">
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', minWidth: 0 }}>
         <span className="logo esconder-mobile">
-          Report<span className="brand-mark">!</span>
+          Jarvis<span className="brand-mark">!</span>
         </span>
         <span className="chip-codigo">{espaco.codigo}</span>
       </div>

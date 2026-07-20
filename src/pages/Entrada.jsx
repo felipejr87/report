@@ -74,7 +74,7 @@ export default function Entrada() {
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-md)' }}>
         <div style={{ width: '100%', maxWidth: 340 }}>
           <h1 className="text-hero" style={{ marginBottom: 'var(--space-xs)' }}>
-            Report<span style={{ color: 'var(--brand)' }}>!</span>
+            Jarvis<span style={{ color: 'var(--brand)' }}>!</span>
           </h1>
           <p className="text-micro" style={{ marginBottom: 'var(--space-lg)' }}>
             {modo === 'entrar' ? 'sua planilha, viva' : 'Onde está cada atividade e qual o próximo passo.'}
