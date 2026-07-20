@@ -10,6 +10,7 @@ import Financeiro from './pages/jarvis/Financeiro'
 import Calendario from './pages/jarvis/Calendario'
 import Habitos from './pages/jarvis/Habitos'
 import Brief from './pages/jarvis/Brief'
+import Assistente from './pages/jarvis/Assistente'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
       <Route path="/espaco/atividade/:id" element={<Atividade />} />
       <Route path="/espaco/timeline/:id" element={<Timeline />} />
 
+      <Route path="/jarvis/assistente" element={<JarvisRoute><Assistente /></JarvisRoute>} />
       <Route path="/jarvis/pilares" element={<JarvisRoute><Pilares /></JarvisRoute>} />
       <Route path="/jarvis/financeiro" element={<JarvisRoute><Financeiro /></JarvisRoute>} />
       <Route path="/jarvis/calendario" element={<JarvisRoute><Calendario /></JarvisRoute>} />

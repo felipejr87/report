@@ -1011,3 +1011,123 @@ a.link-acao { text-decoration-line: underline; }
 .res-nome { font-size: 14px; font-weight: 500; color: var(--text); }
 .res-detalhe { font-size: 13px; color: var(--text-dim); }
 .res-meta { font-size: 12px; color: var(--text-dim); }
+
+/* =============================================
+   Assistente Jarvis — chat
+   ============================================= */
+
+.chat-historico {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+}
+
+.chat-msg {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+}
+.chat-msg.user { flex-direction: row-reverse; }
+
+.chat-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--botao-primario-texto);
+  font-weight: 600;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.chat-bubble {
+  max-width: 85%;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.chat-msg.assistant .chat-bubble {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 4px 12px 12px 12px;
+}
+.chat-msg.user .chat-bubble {
+  background: var(--botao-primario-bg);
+  color: var(--botao-primario-texto);
+  border-radius: 12px 4px 12px 12px;
+}
+
+.chat-bubble .typing-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  margin-right: 3px;
+  animation: piscar 1.2s infinite;
+}
+.chat-bubble .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.chat-bubble .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes piscar {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+
+.chat-input-area {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--line);
+}
+
+.chat-mic {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  color: var(--text-mid);
+}
+.chat-mic[data-ativo="true"] {
+  background: var(--atencao);
+  border-color: var(--atencao);
+  color: #fff;
+  animation: pulso-mic 1s infinite;
+}
+
+.chat-input {
+  flex: 1;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  padding: var(--space-sm) var(--space-md);
+}
+.chat-input:focus { border-color: var(--text); }
+
+.chat-enviar {
+  background: var(--botao-primario-bg);
+  color: var(--botao-primario-texto);
+  border: none;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+}

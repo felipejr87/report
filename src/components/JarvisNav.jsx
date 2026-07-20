@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 
 const ABAS = [
+  { to: '/jarvis/assistente', label: 'Assistente' },
   { to: '/espaco', label: 'Projetos', fim: true },
   { to: '/jarvis/pilares', label: 'Pilares' },
   { to: '/jarvis/financeiro', label: 'Financeiro' },
