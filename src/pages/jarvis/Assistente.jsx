@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Navigate } from 'react-router-dom'
-import { Mic, Square, ArrowUp, History, Plus, X } from 'lucide-react'
+import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../hooks/useToast'
 import { supabaseEspaco, urlFuncao } from '../../lib/supabase'
-import { useVoz } from '../../hooks/useVoz'
+import { useVoz, useFala } from '../../hooks/useVoz'
+
+const CHAVE_VOZ_AUTO = 'jarvis_voz_auto'
 import Header from '../../components/Header'
 
 function renderMsg(texto) {
@@ -23,7 +25,17 @@ export default function Assistente() {
   const [input, setInput] = useState('')
   const [carregando, setCarregando] = useState(false)
   const [mostrarHistorico, setMostrarHistorico] = useState(false)
+  const [vozAutomatica, setVozAutomatica] = useState(() => localStorage.getItem(CHAVE_VOZ_AUTO) === 'true')
   const rodapeRef = useRef(null)
+
+  const { falar, pararFala, falando, suportado: falaSuportada } = useFala()
+
+  function toggleVozAutomatica() {
+    const novo = !vozAutomatica
+    setVozAutomatica(novo)
+    localStorage.setItem(CHAVE_VOZ_AUTO, String(novo))
+    if (!novo) pararFala()
+  }
 
   const cliente = sessao ? supabaseEspaco(sessao.token) : null
 
@@ -109,6 +121,7 @@ export default function Assistente() {
 
       const novoHistorico = [...historicoAtual, { role: 'assistant', content: respostaAssistente }]
       setMensagens(novoHistorico)
+      if (vozAutomatica) falar(respostaAssistente)
       await persistirConversa(novoHistorico, texto)
     } catch {
       setMensagens((prev) => [...prev, { role: 'assistant', content: 'Erro de conexão. Verifique sua internet.' }])
@@ -130,10 +143,24 @@ export default function Assistente() {
           <History size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
           Histórico
         </button>
-        <button type="button" className="link-acao" onClick={novaConversa}>
-          <Plus size={14} />
-          Nova conversa
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+          {falaSuportada && (
+            <button
+              type="button"
+              className="link-acao"
+              data-ativo={vozAutomatica}
+              onClick={toggleVozAutomatica}
+              title={vozAutomatica ? 'Desativar resposta por voz' : 'Ativar resposta por voz'}
+              aria-label={vozAutomatica ? 'Desativar resposta por voz' : 'Ativar resposta por voz'}
+            >
+              {falando ? <Volume2 size={14} /> : vozAutomatica ? <Volume1 size={14} /> : <VolumeX size={14} />}
+            </button>
+          )}
+          <button type="button" className="link-acao" onClick={novaConversa}>
+            <Plus size={14} />
+            Nova conversa
+          </button>
+        </div>
       </div>
 
       {mostrarHistorico && (
@@ -164,7 +191,14 @@ export default function Assistente() {
         {mensagens.map((m, i) => (
           <div key={i} className={`chat-msg ${m.role}`}>
             {m.role === 'assistant' && <span className="chat-avatar">J</span>}
-            <div className="chat-bubble" dangerouslySetInnerHTML={{ __html: renderMsg(m.content) }} />
+            <div className="chat-msg-corpo">
+              <div className="chat-bubble" dangerouslySetInnerHTML={{ __html: renderMsg(m.content) }} />
+              {m.role === 'assistant' && falaSuportada && (
+                <button type="button" className="btn-ouvir-msg" onClick={() => falar(m.content)} title="Ouvir esta mensagem" aria-label="Ouvir esta mensagem">
+                  <Volume2 size={12} />
+                </button>
+              )}
+            </div>
           </div>
         ))}
 

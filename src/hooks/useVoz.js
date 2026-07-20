@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export function useVoz({ onTranscricao, onErro }) {
   const reconhecimentoRef = useRef(null)
@@ -32,4 +32,59 @@ export function useVoz({ onTranscricao, onErro }) {
   }
 
   return { iniciarEscuta, pararEscuta, escutando, suportado }
+}
+
+export function useFala() {
+  const [falando, setFalando] = useState(false)
+  const suportado = typeof window !== 'undefined' && 'speechSynthesis' in window
+
+  function falar(texto) {
+    if (!suportado) return
+    window.speechSynthesis.cancel()
+
+    const textoLimpo = texto
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/#{1,6}\s/g, '')
+      .replace(/`(.*?)`/g, '$1')
+      .replace(/\n+/g, '. ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!textoLimpo) return
+
+    const utterance = new SpeechSynthesisUtterance(textoLimpo)
+    utterance.lang = 'pt-BR'
+    utterance.rate = 1.05
+    utterance.pitch = 1.0
+    utterance.volume = 1.0
+
+    function selecionarVoz() {
+      const vozes = window.speechSynthesis.getVoices()
+      const vozPtBR = vozes.find((v) => v.lang === 'pt-BR' && v.localService)
+        || vozes.find((v) => v.lang === 'pt-BR')
+        || vozes.find((v) => v.lang.startsWith('pt'))
+      if (vozPtBR) utterance.voice = vozPtBR
+    }
+
+    if (window.speechSynthesis.getVoices().length > 0) {
+      selecionarVoz()
+    } else {
+      window.speechSynthesis.addEventListener('voiceschanged', selecionarVoz, { once: true })
+    }
+
+    utterance.onstart = () => setFalando(true)
+    utterance.onend = () => setFalando(false)
+    utterance.onerror = () => setFalando(false)
+
+    window.speechSynthesis.speak(utterance)
+  }
+
+  function pararFala() {
+    window.speechSynthesis.cancel()
+    setFalando(false)
+  }
+
+  useEffect(() => () => window.speechSynthesis.cancel(), [])
+
+  return { falar, pararFala, falando, suportado }
 }
