@@ -9,24 +9,12 @@ import { urlFuncao } from '../lib/supabase'
 // voltaria a exigir gesto toda vez.
 const SILENCIO_WAV = 'data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgAAACAgICAgICAgA=='
 
-// Frames consecutivos de amplitude acima do limiar antes de considerar
-// que é o usuário falando (não um pico de eco/ruído breve). A ~60fps,
-// 8 frames ≈ 130ms, perto do que o prompt original pretendia mas sem
-// implementar de fato.
-const FRAMES_PARA_BARGE_IN = 8
-const LIMIAR_AMPLITUDE = 20
-
 export function useJarvisVoz(token, idioma = 'pt') {
   const [falando, setFalando] = useState(false)
   const [carregandoAudio, setCarregandoAudio] = useState(false)
 
   const audioElRef = useRef(null)
   const streamUrlRef = useRef(null)
-  const micStreamRef = useRef(null)
-  const audioCtxRef = useRef(null)
-  const analyserRef = useRef(null)
-  const bargeTimerRef = useRef(null)
-  const framesAcimaLimiarRef = useRef(0)
 
   function getAudioEl() {
     if (!audioElRef.current) {
@@ -66,22 +54,6 @@ export function useJarvisVoz(token, idioma = 'pt') {
     }
   }
 
-  function pararMonitorMic() {
-    if (bargeTimerRef.current) {
-      cancelAnimationFrame(bargeTimerRef.current)
-      bargeTimerRef.current = null
-    }
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach((t) => t.stop())
-      micStreamRef.current = null
-    }
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {})
-      audioCtxRef.current = null
-    }
-    analyserRef.current = null
-  }
-
   function pararFala() {
     const el = audioElRef.current
     if (el) {
@@ -94,57 +66,9 @@ export function useJarvisVoz(token, idioma = 'pt') {
     if (window.speechSynthesis?.speaking) window.speechSynthesis.cancel()
     setFalando(false)
     setCarregandoAudio(false)
-    pararMonitorMic()
   }
 
   useEffect(() => () => pararFala(), []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Barge-in — monitora o microfone enquanto o Jarvis fala e para a
-  // reprodução assim que detecta o usuário falando por cima.
-  // echoCancellation é essencial aqui: sem isso, o próprio áudio do
-  // Jarvis vazando do alto-falante pro microfone (mais comum em
-  // laptop/celular sem fone) dispara um "barge-in" falso a cada frase.
-  async function iniciarMonitorMic() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      })
-      micStreamRef.current = stream
-
-      const AudioCtx = window.AudioContext || window.webkitAudioContext
-      const ctx = new AudioCtx()
-      audioCtxRef.current = ctx
-      const source = ctx.createMediaStreamSource(stream)
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 256
-      source.connect(analyser)
-      analyserRef.current = analyser
-
-      const buffer = new Uint8Array(analyser.frequencyBinCount)
-      framesAcimaLimiarRef.current = 0
-
-      const checarAmplitude = () => {
-        if (!analyserRef.current) return
-        analyserRef.current.getByteFrequencyData(buffer)
-        const media = buffer.reduce((a, b) => a + b, 0) / buffer.length
-
-        if (media > LIMIAR_AMPLITUDE) {
-          framesAcimaLimiarRef.current++
-          if (framesAcimaLimiarRef.current >= FRAMES_PARA_BARGE_IN) {
-            const el = audioElRef.current
-            if (el && !el.paused) { pararFala(); return }
-          }
-        } else {
-          framesAcimaLimiarRef.current = 0
-        }
-        bargeTimerRef.current = requestAnimationFrame(checarAmplitude)
-      }
-      bargeTimerRef.current = requestAnimationFrame(checarAmplitude)
-    } catch {
-      // Microfone indisponível/negado — barge-in fica desligado, sem problema
-      console.warn('[barge-in] microfone indisponível')
-    }
-  }
 
   async function falar(texto) {
     if (!texto?.trim()) return
@@ -172,9 +96,9 @@ export function useJarvisVoz(token, idioma = 'pt') {
 
       const audio = getAudioEl()
       audio.muted = false
-      audio.onplay = () => { setFalando(true); setCarregandoAudio(false); iniciarMonitorMic() }
-      audio.onended = () => { setFalando(false); pararMonitorMic(); limparStreamUrl() }
-      audio.onerror = () => { setFalando(false); setCarregandoAudio(false); pararMonitorMic() }
+      audio.onplay = () => { setFalando(true); setCarregandoAudio(false) }
+      audio.onended = () => { setFalando(false); limparStreamUrl() }
+      audio.onerror = () => { setFalando(false); setCarregandoAudio(false) }
       audio.src = url
       await audio.play()
     } catch (e) {
