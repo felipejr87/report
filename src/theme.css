@@ -1017,8 +1017,31 @@ a.link-acao { text-decoration-line: underline; }
    Assistente Jarvis — chat
    ============================================= */
 
+/* Tela inteira travada na viewport — só .chat-historico rola por
+   dentro. 100dvh depois de 100vh é fallback intencional: navegadores
+   sem suporte a dvh ficam com vh, os com suporte pegam a viewport
+   dinâmica (ajusta com barra de endereço/teclado do iOS). */
+.jarvis-chat-layout {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--space-md);
+  padding-bottom: 76px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+}
+
 .chat-historico {
   flex: 1;
+  /* min-height:0 é o que permite esse filho flex encolher e rolar
+     dentro do container em vez de empurrar a página inteira — sem
+     isso o histórico de mensagens cresce, a página rola, e a barra
+     de input/mic (que não é fixed) some junto por baixo da tela. */
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1089,6 +1112,7 @@ a.link-acao { text-decoration-line: underline; }
   align-items: center;
   padding-top: var(--space-sm);
   border-top: 1px solid var(--line);
+  flex-shrink: 0;
 }
 
 .chat-mic {

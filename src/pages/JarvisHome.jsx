@@ -420,7 +420,7 @@ export default function JarvisHome() {
   const isJarvis = sessao.espaco.jarvis_enabled === true
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: 'var(--space-md)', paddingBottom: 76, display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', height: '100vh', position: 'relative' }}>
+    <div className="jarvis-chat-layout">
       <Header espaco={sessao.espaco} onSair={sair} />
       <IndicadorFala ativo={falando} />
 
