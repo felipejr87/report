@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
+import { Lightbulb } from 'lucide-react'
 import { supabaseEspaco } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import Header from '../../components/Header'
 import CapturaRapida from '../../components/CapturaRapida'
+import { isEnabled } from '../../lib/features'
 
 function fmt(v) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0) }
 
@@ -22,6 +24,7 @@ function diasDaSemanaAtual() {
 
 export default function Brief() {
   const { sessao, sair } = useAuth()
+  const navigate = useNavigate()
   const [dados, setDados] = useState(null)
   const [erro, setErro] = useState('')
 
@@ -83,7 +86,15 @@ export default function Brief() {
       alertas.push({ msg: `${p.nome}: sem data de lançamento definida`, severidade: 'confronto' })
     })
 
-    setDados({ eventosHoje: eventosHoje || [], habitos: habitos || [], checks: checks || [], alertas, semana })
+    setDados({
+      eventosHoje: eventosHoje || [],
+      habitos: habitos || [],
+      checks: checks || [],
+      alertas,
+      semana,
+      lancamentosCount: lancamentosMes?.length || 0,
+      atividadesParadas7d: (atividadesParadas || []).filter((a) => Math.floor((Date.now() - new Date(a.atualizado_em)) / 86400000) > 7).length,
+    })
   }, [sessao?.token])
 
   useEffect(() => { gerarBrief() }, [gerarBrief])
@@ -95,6 +106,31 @@ export default function Brief() {
   const confrontos = dados.alertas.filter((a) => a.severidade === 'confronto')
   const atencoes = dados.alertas.filter((a) => a.severidade === 'atencao')
   const confrontoAtivo = confrontos[0]
+
+  const mesAtual = new Date().toISOString().slice(0, 7)
+  const checksEssaSemana = dados.checks.length
+  const sugestoes = []
+  if (dados.lancamentosCount < 5) {
+    sugestoes.push({
+      mensagem: 'Você registrou poucos gastos este mês. Quer listar os fixos pra confirmar?',
+      labelAcao: 'Ir pro assistente',
+      acao: () => navigate(`/jarvis/assistente?msg=${encodeURIComponent(`lista os gastos fixos de ${mesAtual}`)}`),
+    })
+  }
+  if (dados.atividadesParadas7d > 3) {
+    sugestoes.push({
+      mensagem: `${dados.atividadesParadas7d} atividades sem movimento há mais de 7 dias. Revisar?`,
+      labelAcao: 'Ver projetos',
+      acao: () => navigate('/espaco'),
+    })
+  }
+  if (checksEssaSemana < 2) {
+    sugestoes.push({
+      mensagem: 'Poucos checks de hábito esta semana. Treino em dia?',
+      labelAcao: 'Ver hábitos',
+      acao: () => navigate('/jarvis/habitos'),
+    })
+  }
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
@@ -128,10 +164,25 @@ export default function Brief() {
         </section>
       )}
 
-      {confrontoAtivo && (
+      {isEnabled('JARVIS_MODO_CONFRONTO') && confrontoAtivo && (
         <section className="detalhe-secao">
           <h2 className="section-label">Modo confronto</h2>
           <p className="brief-confronto">"{confrontoAtivo.msg}"</p>
+        </section>
+      )}
+
+      {sugestoes.length > 0 && (
+        <section className="detalhe-secao">
+          <h2 className="section-label">Jarvis sugere</h2>
+          {sugestoes.map((s, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-sm)', padding: '6px 0' }}>
+              <Lightbulb size={14} style={{ marginTop: 2, flexShrink: 0, color: 'var(--brand)' }} />
+              <div>
+                <p className="text-body" style={{ marginBottom: 4 }}>{s.mensagem}</p>
+                <button type="button" className="link-acao" onClick={s.acao}>{s.labelAcao}</button>
+              </div>
+            </div>
+          ))}
         </section>
       )}
 

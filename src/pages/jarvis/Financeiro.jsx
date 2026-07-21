@@ -4,6 +4,7 @@ import { supabaseEspaco } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../hooks/useToast'
 import Header from '../../components/Header'
+import { isEnabled } from '../../lib/features'
 
 function hoje() { return new Date().toISOString().split('T')[0] }
 function mesAtual() { return new Date().toISOString().slice(0, 7) }
@@ -135,7 +136,7 @@ export default function Financeiro() {
             })}
           </section>
 
-          {dividas.length > 0 && (
+          {isEnabled('FIN_DIVIDAS') && dividas.length > 0 && (
             <section className="detalhe-secao">
               <h2 className="section-label">Dívidas</h2>
               {dividas.map((d) => (

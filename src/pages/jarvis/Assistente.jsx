@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../hooks/useToast'
@@ -27,6 +27,8 @@ export default function Assistente() {
   const [mostrarHistorico, setMostrarHistorico] = useState(false)
   const [vozAutomatica, setVozAutomatica] = useState(() => localStorage.getItem(CHAVE_VOZ_AUTO) === 'true')
   const rodapeRef = useRef(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const msgInicialEnviada = useRef(false)
 
   const { falar, pararFala, falando, suportado: falaSuportada } = useFala()
 
@@ -66,6 +68,18 @@ export default function Assistente() {
 
   useEffect(() => { carregarConversas(); novaConversa() }, [carregarConversas, novaConversa])
   useEffect(() => { rodapeRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens])
+
+  // Suporta /jarvis/assistente?msg=... (usado pelas sugestões do Brief)
+  // — envia a mensagem automaticamente depois que a saudação carregar.
+  useEffect(() => {
+    const msg = searchParams.get('msg')
+    if (msg && mensagens.length > 0 && !msgInicialEnviada.current) {
+      msgInicialEnviada.current = true
+      setSearchParams({}, { replace: true })
+      enviar(msg)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mensagens, searchParams])
 
   if (!sessao) return <Navigate to="/" replace />
 
