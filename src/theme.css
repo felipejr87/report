@@ -1299,3 +1299,33 @@ a.link-acao { text-decoration-line: underline; }
   opacity: 0.6;
 }
 .btn-ouvir-msg:hover { opacity: 1; color: var(--text); }
+
+/* Card de confirmação de ação (Jarvis) */
+.confirmacao-card {
+  border: 1px solid var(--brand);
+  border-radius: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.conf-titulo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+}
+.conf-desc { font-size: 14px; color: var(--text); }
+.conf-acoes { display: flex; gap: var(--space-sm); }
+.conf-sim, .conf-nao {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  padding: 6px 14px;
+}
+.conf-sim { background: var(--botao-primario-bg); color: var(--botao-primario-texto); }
+.conf-nao { background: transparent; color: var(--text-dim); border: 1px solid var(--line); }

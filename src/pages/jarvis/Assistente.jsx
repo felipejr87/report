@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
-import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX } from 'lucide-react'
+import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../hooks/useToast'
 import { supabaseEspaco, urlFuncao } from '../../lib/supabase'
@@ -26,6 +26,8 @@ export default function Assistente() {
   const [carregando, setCarregando] = useState(false)
   const [mostrarHistorico, setMostrarHistorico] = useState(false)
   const [vozAutomatica, setVozAutomatica] = useState(() => localStorage.getItem(CHAVE_VOZ_AUTO) === 'true')
+  const [acaoPendente, setAcaoPendente] = useState(null)
+  const [confirmando, setConfirmando] = useState(false)
   const rodapeRef = useRef(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const msgInicialEnviada = useRef(false)
@@ -53,22 +55,21 @@ export default function Assistente() {
     if (!cliente) return
     setConversaId(null)
     setMostrarHistorico(false)
+    setAcaoPendente(null)
 
-    const mes = new Date().toISOString().slice(0, 7)
-    const { data: lncs } = await cliente.from('lancamentos').select('valor').gte('data', `${mes}-01`)
-    const saldo = (lncs || []).reduce((s, l) => s + l.valor, 0)
     const hora = new Date().getHours()
     const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite'
+    const dia = new Date().toLocaleDateString('pt-BR', { weekday: 'long' })
 
     setMensagens([{
       role: 'assistant',
-      content: `${saudacao}, Felipe. ${lncs?.length ? `Saldo este mês: **R$ ${saldo.toFixed(2).replace('.', ',')}**.` : 'Nenhum lançamento registrado este mês ainda.'}\n\nO que posso ajudar a decidir ou fazer hoje?`,
+      content: `${saudacao}, Felipe. ${dia.charAt(0).toUpperCase() + dia.slice(1)}. O que precisa?`,
     }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessao?.token])
 
   useEffect(() => { carregarConversas(); novaConversa() }, [carregarConversas, novaConversa])
-  useEffect(() => { rodapeRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens])
+  useEffect(() => { rodapeRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens, acaoPendente])
 
   // Suporta /jarvis/assistente?msg=... (usado pelas sugestões do Brief)
   // — envia a mensagem automaticamente depois que a saudação carregar.
@@ -87,11 +88,12 @@ export default function Assistente() {
   async function carregarConversa(id) {
     setConversaId(id)
     setMostrarHistorico(false)
+    setAcaoPendente(null)
     const { data } = await cliente.from('conversa_mensagens').select('role, content, criado_em').eq('conversa_id', id).order('criado_em')
     setMensagens((data || []).map((m) => ({ role: m.role, content: m.content })))
   }
 
-  async function persistirConversa(historico, primeiroTextoUsuario) {
+  async function persistirConversa(historico, primeiroTextoUsuario, qtdNovas = 2) {
     let convId = conversaId
 
     if (!convId) {
@@ -109,9 +111,12 @@ export default function Assistente() {
       await cliente.from('conversas').update({ atualizado_em: new Date().toISOString() }).eq('id', convId)
     }
 
-    const ultimasDuas = historico.slice(-2)
+    // qtdNovas: quantas mensagens no fim do array são realmente novas
+    // (confirmar/cancelar só adicionam 1 — a proposta anterior já foi
+    // persistida no turno de enviar()).
+    const novas = historico.slice(-qtdNovas)
     await cliente.from('conversa_mensagens').insert(
-      ultimasDuas.map((m) => ({ conversa_id: convId, role: m.role, content: m.content }))
+      novas.map((m) => ({ conversa_id: convId, role: m.role, content: m.content }))
     )
   }
 
@@ -127,6 +132,7 @@ export default function Assistente() {
     setMensagens(historicoAtual)
     setInput('')
     setCarregando(true)
+    setAcaoPendente(null)
 
     try {
       const res = await fetch(urlFuncao('assistente-jarvis'), {
@@ -140,12 +146,43 @@ export default function Assistente() {
 
       const novoHistorico = [...historicoAtual, { role: 'assistant', content: respostaAssistente }]
       setMensagens(novoHistorico)
+      if (res.ok && data.requer_confirmacao) setAcaoPendente(data.proposta)
       if (vozAutomatica) falar(respostaAssistente)
       await persistirConversa(novoHistorico, texto)
     } catch {
       setMensagens((prev) => [...prev, { role: 'assistant', content: 'Erro de conexão. Verifique sua internet.' }])
     }
     setCarregando(false)
+  }
+
+  async function confirmarAcao() {
+    if (!acaoPendente) return
+    setConfirmando(true)
+    try {
+      const res = await fetch(urlFuncao('assistente-jarvis'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessao.token}` },
+        body: JSON.stringify({ confirmar_acao: { tool: acaoPendente.tool, input: acaoPendente.input } }),
+      })
+      const data = await res.json()
+      const texto = res.ok && data.ok ? data.acao_executada : (data.erro || 'Erro ao executar.')
+      const msg = { role: 'assistant', content: `✓ ${texto}` }
+      const novoHistorico = [...mensagens, msg]
+      setMensagens(novoHistorico)
+      setAcaoPendente(null)
+      if (vozAutomatica) falar(texto)
+      await persistirConversa(novoHistorico, texto, 1)
+    } catch {
+      toast?.erro('Erro de conexão ao confirmar.')
+    }
+    setConfirmando(false)
+  }
+
+  async function cancelarAcao() {
+    setAcaoPendente(null)
+    const novoHistorico = [...mensagens, { role: 'assistant', content: 'Cancelado.' }]
+    setMensagens(novoHistorico)
+    await persistirConversa(novoHistorico, 'Cancelado.', 1)
   }
 
   const { iniciarEscuta, pararEscuta, escutando, suportado } = useVoz({
@@ -226,6 +263,21 @@ export default function Assistente() {
             <span className="chat-avatar">J</span>
             <div className="chat-bubble">
               <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+            </div>
+          </div>
+        )}
+
+        {acaoPendente && (
+          <div className="confirmacao-card">
+            <p className="conf-titulo"><Zap size={13} /> Confirmar ação</p>
+            <p className="conf-desc">{acaoPendente.descricao}</p>
+            <div className="conf-acoes">
+              <button type="button" className="conf-sim" onClick={confirmarAcao} disabled={confirmando}>
+                <Check size={14} /> {confirmando ? 'Executando...' : 'Confirmar'}
+              </button>
+              <button type="button" className="conf-nao" onClick={cancelarAcao} disabled={confirmando}>
+                <X size={14} /> Cancelar
+              </button>
             </div>
           </div>
         )}
