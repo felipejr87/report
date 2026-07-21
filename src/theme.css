@@ -1151,54 +1151,84 @@ a.link-acao { text-decoration-line: underline; }
 }
 
 /* =============================================
-   Jarvis — bloco de entrada (voz + atalhos), tela de Projetos
+   Jarvis — Boas-vindas (saudação + clima + sugestão do dia), tela de Projetos
    ============================================= */
 
-.jarvis-entrada {
+.boas-vindas {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: var(--space-md);
   padding: var(--space-lg) 0;
   border-bottom: 1px solid var(--line);
 }
 
-.jarvis-voz-btn {
+.bv-topo {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.bv-saudacao { font-size: 20px; font-weight: 500; color: var(--text); }
+.bv-dia { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+
+.bv-tempo {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
-  max-width: 280px;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+  color: var(--text-mid);
+}
+.tempo-info { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.tempo-temp { font-size: 16px; font-weight: 600; color: var(--text); }
+.tempo-desc { font-size: 11px; color: var(--text-dim); text-transform: capitalize; }
+.tempo-chuva { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: var(--refinamento); }
+
+.bv-eventos { display: flex; flex-direction: column; gap: 4px; }
+.bv-evento { display: flex; gap: var(--space-sm); font-size: 14px; }
+.bv-evento-hora { color: var(--brand); flex-shrink: 0; width: 42px; }
+.bv-mais { font-size: 12px; color: var(--text-dim); }
+
+.bv-sugestao {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+  font-size: 14px;
+  color: var(--text-mid);
+  font-style: italic;
+}
+.bv-sugestao-label { color: var(--brand); font-style: normal; flex-shrink: 0; }
+
+.bv-acoes { display: flex; gap: var(--space-sm); align-items: center; }
+.bv-btn-principal {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  background: var(--botao-primario-bg);
+  color: var(--botao-primario-texto);
+  border: none;
+  border-radius: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  font-weight: 500;
+}
+.bv-btn-sec {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--space-sm);
-  padding: var(--space-md);
-  color: var(--text);
-  transition: border-color var(--ease), background var(--ease);
-}
-.jarvis-voz-btn:hover { border-color: var(--brand); }
-
-.jarvis-atalhos {
-  display: flex;
-  gap: var(--space-sm);
-  width: 100%;
-  max-width: 280px;
-}
-.atalho {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: 1px solid var(--line);
-  border-radius: var(--space-sm);
-  padding: var(--space-sm) 4px;
-  font-size: 12px;
+  padding: var(--space-sm);
   color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.atalho:hover { color: var(--text); border-color: var(--text-mid); }
+.bv-btn-sec:hover { color: var(--text); border-color: var(--brand); }
+
+.bv-skeleton { padding: var(--space-lg) 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+.skel-line { height: 16px; background: var(--surface); border-radius: 4px; animation: bv-shimmer 1.5s infinite; }
+.skel-line.w-40 { width: 40%; }
+.skel-line.w-60 { width: 60%; }
+@keyframes bv-shimmer { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
 /* =============================================
    Assistente Jarvis — histórico de conversas

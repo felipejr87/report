@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Flame, AlertTriangle, Plus, Search, X, Mic, MessageCircle, ClipboardList, Wallet } from 'lucide-react'
+import { Flame, AlertTriangle, Plus, Search, X } from 'lucide-react'
 import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
@@ -8,6 +8,7 @@ import { ordenarProjetosPorEntrega, precisaDeTracao } from '../lib/projeto'
 import Header from '../components/Header'
 import FormProjeto from '../components/FormProjeto'
 import Modal from '../components/Modal'
+import BoasVindas from '../components/jarvis/BoasVindas'
 
 const MARCAS_DIACRITICAS = new RegExp(
   '[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036f) + ']', 'g'
@@ -91,25 +92,7 @@ export default function Espaco() {
     <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
       <Header espaco={sessao.espaco} onSair={sair} />
 
-      {isJarvis && (
-        <div className="jarvis-entrada">
-          <button type="button" className="jarvis-voz-btn" onClick={() => navigate('/jarvis/assistente')}>
-            <Mic size={22} />
-            <span>Falar com Jarvis</span>
-          </button>
-          <div className="jarvis-atalhos">
-            <button type="button" className="atalho" onClick={() => navigate('/jarvis/assistente')}>
-              <MessageCircle size={14} /> Chat
-            </button>
-            <button type="button" className="atalho" onClick={() => navigate('/jarvis/brief')}>
-              <ClipboardList size={14} /> Brief
-            </button>
-            <button type="button" className="atalho" onClick={() => navigate('/jarvis/financeiro')}>
-              <Wallet size={14} /> Financeiro
-            </button>
-          </div>
-        </div>
-      )}
+      {isJarvis && <BoasVindas />}
 
       <div className="layout-espaco">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
