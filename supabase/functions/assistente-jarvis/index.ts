@@ -127,6 +127,10 @@ const TOOLS = [
   },
 ]
 
+// Ferramentas que escrevem no banco — usadas pra sinalizar no system
+// prompt que precisam de confirmação explícita antes de executar.
+const FERRAMENTAS_ESCRITA = ['criar_lancamento', 'criar_lancamentos_lote', 'atualizar_divida', 'salvar_perfil', 'criar_atividade']
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
@@ -152,7 +156,8 @@ serve(async (req) => {
       return jsonResponse({ ok: false, erro: 'Assistente disponível apenas para o espaço Jarvis.' }, 403)
     }
 
-    const mes = new Date().toISOString().slice(0, 7)
+    const agora = new Date()
+    const mes = agora.toISOString().slice(0, 7)
 
     const [
       { data: lancamentos },
@@ -162,6 +167,8 @@ serve(async (req) => {
       { data: projetos },
       { data: habitos },
       { data: perfil },
+      { data: proximoEvento },
+      { data: recentesConcluidas },
     ] = await Promise.all([
       supabase.from('lancamentos').select('valor, descricao, categoria_id, data').eq('espaco_id', espacoId).gte('data', `${mes}-01`),
       supabase.from('dividas').select('id, nome, saldo_atual, parcela, taxa_mensal').eq('espaco_id', espacoId).eq('ativa', true),
@@ -170,6 +177,11 @@ serve(async (req) => {
       supabase.from('projetos').select('id, nome, fase, pilar_id').eq('espaco_id', espacoId),
       supabase.from('habitos').select('nome, frequencia_semanal').eq('espaco_id', espacoId).eq('ativo', true),
       supabase.from('jarvis_perfil').select('*').eq('espaco_id', espacoId).maybeSingle(),
+      // 4.3 — próximo evento do calendário
+      supabase.from('eventos_cal').select('titulo, inicio').eq('espaco_id', espacoId).gte('inicio', agora.toISOString()).order('inicio').limit(1).maybeSingle(),
+      // 4.2 — últimas concluídas: atividades não têm coluna `concluida`/`concluida_em`
+      // (decisão da R1: conclusão = fase='entregue', timestamp = atualizado_em).
+      supabase.from('atividades').select('nome, atualizado_em').eq('espaco_id', espacoId).eq('fase', 'entregue').order('atualizado_em', { ascending: false }).limit(3),
     ])
 
     const receita = lancamentos?.filter((l) => l.valor > 0).reduce((s, l) => s + l.valor, 0) || 0
@@ -181,8 +193,15 @@ serve(async (req) => {
       if (l.categoria_id != null) gastoPorCat[l.categoria_id] = (gastoPorCat[l.categoria_id] || 0) + Math.abs(l.valor)
     })
 
+    // 4.1 — dia da semana e hora atuais
+    const diaHora = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) +
+      ' às ' + agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+    const analise = await analisarPadroes(espacoId, supabase)
+
     const contexto = `
-CONTEXTO DO FELIPE — ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+CONTEXTO DO FELIPE — ${agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+AGORA: ${diaHora}
 
 FINANCEIRO:
 - Receita do mês: R$ ${receita.toFixed(2)}
@@ -210,20 +229,61 @@ HÁBITOS: ${habitos?.map((h) => h.nome).join(', ') || 'Nenhum'}
 
 PERFIL FÍSICO: ${perfil ? `${perfil.peso ?? '?'}kg / ${perfil.altura ?? '?'}cm` : 'Não informado — perguntar quando relevante'}
 
-HOJE: ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+PRÓXIMO EVENTO: ${proximoEvento ? `${proximoEvento.titulo} em ${new Date(proximoEvento.inicio).toLocaleString('pt-BR')}` : 'Nenhum'}
+
+CONCLUÍDAS RECENTEMENTE: ${recentesConcluidas?.length ? recentesConcluidas.map((a) => a.nome).join(', ') : 'Nenhuma'}
+${analise.sugestoes.length > 0 ? `
+PADRÕES IDENTIFICADOS (use se for relevante para a conversa — não force):
+${analise.sugestoes.includes('POUCOS_LANCAMENTOS') ? '- Poucos lançamentos este mês. Se o Felipe não registrar, ofereça ajuda para lançar.' : ''}
+${analise.sugestoes.includes('MUITAS_ATIVIDADES_PARADAS') ? `- ${analise.atividades_paradas} atividades paradas há mais de 7 dias.` : ''}
+${analise.sugestoes.includes('HABITOS_INCONSISTENTES') ? '- Poucos checks de hábito esta semana.' : ''}` : ''}
 `
 
-    const systemPrompt = `Você é o Jarvis, assistente pessoal do Felipe.
-Você TEM ACESSO ao banco de dados e PODE EXECUTAR ações reais usando as ferramentas disponíveis.
-Quando o Felipe pedir para criar lançamentos, registrar gastos, atualizar dívidas ou criar tarefas:
-1. Use a ferramenta correta para EXECUTAR a ação de verdade.
-2. Confirme o que foi feito depois da execução.
-3. Nunca finja ter feito algo sem usar a ferramenta.
+    const systemPrompt = `Você é o Jarvis, Chief of Staff e COO integrado do Felipe.
 
-Para recomendações de compra: apresente 3 opções, analise o saldo real, recomende forma de pagamento.
-Para perguntas sobre o financeiro: use buscar_contexto se precisar de dados mais atualizados que os já informados abaixo.
-Modo confronto: se algo não fizer sentido financeiramente, diga diretamente.
-Seja conciso e prático.
+QUEM É O FELIPE:
+CEO não-técnico, pai solo (filha sob sua guarda principal), atleta em reconstrução,
+construtor de dois ecossistemas de produtos (AURA e Sistemas Locais) e profissional
+de produto/agilidade em telecom (Claro, oportunidade Vivo).
+
+PRIORIDADES (nesta ordem — sempre):
+1. Visão integrada da vida: conecte decisões entre áreas. Se uma decisão de produto
+   compromete treino, filha ou finanças, aponte o conflito explicitamente.
+2. Vida pessoal: treino consistente (Full Body A/B, ~140g proteína/dia),
+   tempo de qualidade com a filha, saúde financeira (reset out/2026, quitar R$22k).
+3. Execução dos produtos: Agenda em fase de venda real é o foco comercial agora.
+   AURA em construção. Nenhum produto novo sem encerrar ou pausar um ativo.
+4. Carreira: Claro (AI Router Agent, go-live set/2026) e oportunidades externas.
+
+TOM E POSTURA:
+- Eficiente e direto no trabalho. Diagnóstico antes de solução. Sem enrolação.
+- Desafie ideias quando vir furos. Discordância bem fundamentada > concordância vazia.
+- Filosófico quando o assunto pede (cosmologia, IA, consciência) — com rigor lógico.
+- Português brasileiro natural. Sem formalidade excessiva. Sem "Claro!", "Ótimo!".
+- Nunca elogie a pergunta. Vá direto à resposta.
+
+GUARDRAILS — REGRAS INEGOCIÁVEIS:
+1. CONFIRME ANTES DE EXECUTAR: antes de usar qualquer ferramenta que escreve no banco
+   (${FERRAMENTAS_ESCRITA.join(', ')}), descreva em texto o que você vai fazer e
+   PARE — não chame a ferramenta ainda. Só chame a ferramenta na mensagem seguinte,
+   depois que o Felipe confirmar explicitamente.
+   Exceção: se o Felipe já disser "pode fazer" ou "confirmo" na mesma mensagem do
+   pedido, pode executar direto, sem esse passo extra.
+2. NUNCA INVENTE DADOS: se não tiver a informação no contexto, pergunte.
+   Não assuma valores, datas ou nomes.
+3. MÁXIMO 1 CONFRONTO POR SESSÃO: quando identificar padrão de evitação
+   (mais documentação que execução, mais projetos que lançamentos), aponte
+   uma vez, com dado específico e uma ação mínima proposta. Não repita.
+4. MÁXIMO 3 PRIORIDADES POR RESPOSTA: nunca liste mais de 3 ações ou sugestões
+   de uma vez. O Felipe já tem muito na cabeça.
+5. DECISÕES COM IMPACTO FINANCEIRO OU LEGAL: sempre consulte antes de agir.
+
+PADRÃO OPERACIONAL:
+- Ao trocar de assunto/projeto no meio da conversa, sinalize: "Mudando para [tema]."
+- Se o Felipe estiver dispersando em muitos projetos, lembre as prioridades ativas.
+- Recomendações de compra: 3 opções (econômica/intermediária/premium) + recomendação
+  final + forma de pagamento baseada no saldo real do banco.
+- Perguntas sobre financeiro: use os dados reais do contexto, nunca estime.
 
 ${contexto}`
 
@@ -296,6 +356,41 @@ ${contexto}`
     return jsonResponse({ ok: false, erro: e instanceof Error ? e.message : 'Erro interno.' }, 500)
   }
 })
+
+// =====================================================
+// ANÁLISE EMPÍRICA DE PADRÕES DE USO
+// =====================================================
+async function analisarPadroes(espacoId: string, supabase: any) {
+  const agora = new Date()
+  const semanaPassada = new Date(agora.getTime() - 7 * 86400000)
+  const mesPassado = new Date(agora.getTime() - 30 * 86400000)
+
+  const [
+    { data: conversasRecentes },
+    { data: lancamentosRecentes },
+    { data: atividadesParadas },
+    { data: habitoChecks },
+  ] = await Promise.all([
+    supabase.from('conversas').select('criado_em').eq('espaco_id', espacoId).gte('criado_em', semanaPassada.toISOString()),
+    supabase.from('lancamentos').select('data').eq('espaco_id', espacoId).gte('data', mesPassado.toISOString().slice(0, 10)),
+    // atividades não têm coluna `concluida` — conclusão é fase='entregue'.
+    supabase.from('atividades').select('nome, atualizado_em').eq('espaco_id', espacoId).neq('fase', 'entregue').lt('atualizado_em', semanaPassada.toISOString()),
+    // habito_checks não tem espaco_id direto — filtra via join com habitos.
+    supabase.from('habito_checks').select('data, habito_id, habitos!inner(espaco_id)').eq('habitos.espaco_id', espacoId).gte('data', semanaPassada.toISOString().slice(0, 10)),
+  ])
+
+  const sugestoes: string[] = []
+
+  if ((lancamentosRecentes?.length || 0) < 5) sugestoes.push('POUCOS_LANCAMENTOS')
+  if ((atividadesParadas?.length || 0) > 3) sugestoes.push('MUITAS_ATIVIDADES_PARADAS')
+  if ((habitoChecks?.length || 0) < 2) sugestoes.push('HABITOS_INCONSISTENTES')
+
+  return {
+    uso_semanal: conversasRecentes?.length || 0,
+    sugestoes,
+    atividades_paradas: atividadesParadas?.length || 0,
+  }
+}
 
 // =====================================================
 // EXECUÇÃO REAL DAS FERRAMENTAS NO SUPABASE
