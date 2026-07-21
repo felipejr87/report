@@ -18,6 +18,96 @@ function renderMsg(texto) {
     .replace(/\n/g, '<br>')
 }
 
+// Frases curtas, tom J.A.R.V.I.S. — diretas, sem clichê de pôster
+// motivacional. Uma por período, sorteada a cada nova conversa.
+const FRASES_MOTIVACIONAIS = {
+  manha: [
+    'O dia começa agora — o resto é execução.',
+    'Prioridade clara vale mais que agenda cheia.',
+    'Um problema resolvido hoje não some, mas para de crescer.',
+    'Menos abas abertas, mais coisa entregue.',
+    'Disciplina de hoje é o resultado de outubro.',
+  ],
+  tarde: [
+    'Metade do caminho andado. Segue no ritmo.',
+    'Ajusta a rota, não precisa recomeçar.',
+    'O que já rendeu, rendeu. Próximo passo.',
+    'Sem pressa, sem parar.',
+    'Tarde de continuar, não de justificar.',
+  ],
+  noite: [
+    'O dia não precisa ser perfeito pra ter valido.',
+    'Fechar bem hoje abre bem amanhã.',
+    'Descansar é parte do plano, não desvio dele.',
+    'O que não foi feito espera. Você, não.',
+    'Silêncio agora, retomada amanhã.',
+  ],
+}
+
+function frase(periodo) {
+  const opcoes = FRASES_MOTIVACIONAIS[periodo]
+  return opcoes[Math.floor(Math.random() * opcoes.length)]
+}
+
+function periodoDe(saudacao) {
+  if (saudacao === 'Bom dia') return 'manha'
+  if (saudacao === 'Boa tarde') return 'tarde'
+  return 'noite'
+}
+
+function horaEvento(iso) {
+  return new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+}
+
+// Constrói a saudação inicial usando o briefing (clima/agenda/atividades)
+// já carregado — conteúdo muda de peso conforme o período do dia:
+// manhã = digest completo, tarde = leve, noite = sugestões + fechamento.
+function montarSaudacao(dados) {
+  const agoraFallback = new Date().getHours()
+  if (!dados) {
+    const saud = agoraFallback < 12 ? 'Bom dia' : agoraFallback < 18 ? 'Boa tarde' : 'Boa noite'
+    return `${saud}, Felipe. O que precisa?`
+  }
+
+  const periodo = periodoDe(dados.saudacao)
+  const dia = dados.diaSemana.charAt(0).toUpperCase() + dados.diaSemana.slice(1)
+  const linhas = [`${dados.saudacao}, Felipe. ${dia}, ${dados.hora}.`]
+
+  if (periodo === 'manha') {
+    if (dados.tempo) {
+      const chuva = dados.tempo.probChuva > 40 ? ` — ${dados.tempo.probChuva}% de chance de chuva` : ''
+      linhas.push(`${dados.tempo.temp}°C, ${dados.tempo.descricao}${chuva}.`)
+    }
+    linhas.push(
+      dados.eventosHoje.length > 0
+        ? `Agenda: ${dados.eventosHoje.slice(0, 3).map((e) => `${horaEvento(e.inicio)} ${e.titulo}`).join('; ')}.`
+        : 'Agenda livre hoje.'
+    )
+    if (dados.urgentes.length > 0) {
+      linhas.push(`Prioridade: "${dados.urgentes[0].nome}" vence em breve.`)
+    } else if (dados.paradas.length > 0) {
+      linhas.push(`"${dados.paradas[0].nome}" está parada há dias — vale um empurrão.`)
+    }
+    linhas.push(frase('manha'))
+    linhas.push('O que precisa?')
+  } else if (periodo === 'tarde') {
+    const proximo = dados.eventosHoje.find((e) => new Date(e.inicio) > new Date())
+    if (proximo) linhas.push(`Próximo compromisso: ${proximo.titulo} às ${horaEvento(proximo.inicio)}.`)
+    linhas.push(frase('tarde'))
+    linhas.push('O que precisa?')
+  } else {
+    if (dados.habitosPendentes.length > 0) {
+      linhas.push(`Ainda sem marcar: ${dados.habitosPendentes.slice(0, 2).map((h) => h.nome).join(', ')}.`)
+    }
+    if (dados.urgentes.length > 0) linhas.push(`Amanhã: "${dados.urgentes[0].nome}" tem prioridade.`)
+    if (dados.paradas.length > 0) linhas.push(`"${dados.paradas[0].nome}" pede atenção antes que vire urgência.`)
+    linhas.push(frase('noite'))
+    linhas.push('Como fecha o dia — tudo em dia ou ficou algo solto pra amanhã?')
+  }
+
+  return linhas.join('\n')
+}
+
 export default function JarvisHome() {
   const { sessao, sair } = useAuth()
   const toast = useToast()
@@ -48,13 +138,15 @@ export default function JarvisHome() {
   const cliente = sessao ? supabaseEspaco(sessao.token) : null
 
   const carregarBriefing = useCallback(async () => {
-    if (!sessao) return
+    if (!sessao) return null
     try {
       const res = await fetch(urlFuncao('jarvis-briefing'), { headers: { Authorization: `Bearer ${sessao.token}` } })
       const data = await res.json()
-      if (data.ok) setBriefing(data)
+      if (data.ok) { setBriefing(data); return data }
+      return null
     } catch (e) {
       console.warn('[jarvis-briefing]', e)
+      return null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessao?.token])
@@ -72,18 +164,12 @@ export default function JarvisHome() {
     setMostrarHistorico(false)
     setAcaoPendente(null)
 
-    const hora = new Date().getHours()
-    const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite'
-    const dia = new Date().toLocaleDateString('pt-BR', { weekday: 'long' })
-
-    setMensagens([{
-      role: 'assistant',
-      content: `${saudacao}, Felipe. ${dia.charAt(0).toUpperCase() + dia.slice(1)}. O que precisa?`,
-    }])
+    const dados = await carregarBriefing()
+    setMensagens([{ role: 'assistant', content: montarSaudacao(dados) }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessao?.token])
+  }, [sessao?.token, carregarBriefing])
 
-  useEffect(() => { carregarBriefing(); carregarConversas(); novaConversa() }, [carregarBriefing, carregarConversas, novaConversa])
+  useEffect(() => { carregarConversas(); novaConversa() }, [carregarConversas, novaConversa])
   useEffect(() => { rodapeRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens, acaoPendente])
 
   // Suporta /jarvis?msg=... (usado pelas sugestões da aba Vida)
