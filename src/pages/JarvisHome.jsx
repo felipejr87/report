@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
-import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check, Umbrella } from 'lucide-react'
+import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check, Umbrella, Bell, BellOff } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { supabaseEspaco, urlFuncao } from '../lib/supabase'
@@ -10,6 +10,19 @@ import TabBar from '../components/jarvis/TabBar'
 import IndicadorFala from '../components/jarvis/IndicadorFala'
 
 const CHAVE_VOZ_AUTO = 'jarvis_voz_auto'
+
+// Chave pública VAPID — não é segredo, o navegador precisa dela pra
+// criar a subscription (o par privado fica só na Edge Function).
+const VAPID_PUBLIC_KEY = 'BNfcd5d_8ocSDgKUpZIy0AdaLWeSSGb_DMZgU97qOSjlrIOJ_MYAR0M0Smjjj-hwfvA5zLmn9-M8IO-1KAqmlhc'
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(base64)
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)))
+}
+
+const pushSuportado = typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window
 
 function renderMsg(texto) {
   return texto
@@ -121,6 +134,8 @@ export default function JarvisHome() {
   const [acaoPendente, setAcaoPendente] = useState(null)
   const [confirmando, setConfirmando] = useState(false)
   const [briefing, setBriefing] = useState(null)
+  const [notifAtivo, setNotifAtivo] = useState(false)
+  const [notifCarregando, setNotifCarregando] = useState(false)
   const rodapeRef = useRef(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const msgInicialEnviada = useRef(false)
@@ -136,6 +151,51 @@ export default function JarvisHome() {
   }
 
   const cliente = sessao ? supabaseEspaco(sessao.token) : null
+
+  useEffect(() => {
+    if (!pushSuportado) return
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => setNotifAtivo(!!sub))
+      .catch(() => {})
+  }, [])
+
+  async function alternarNotificacoes() {
+    if (!pushSuportado || !cliente) { toast?.erro('Notificações push não são suportadas neste navegador.'); return }
+    setNotifCarregando(true)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      if (notifAtivo) {
+        const sub = await reg.pushManager.getSubscription()
+        if (sub) {
+          await cliente.from('jarvis_push_subscriptions').delete().eq('endpoint', sub.endpoint)
+          await sub.unsubscribe()
+        }
+        setNotifAtivo(false)
+      } else {
+        const permissao = await Notification.requestPermission()
+        if (permissao !== 'granted') { toast?.erro('Permissão de notificação negada.'); return }
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        })
+        const subJson = sub.toJSON()
+        const { error } = await cliente.from('jarvis_push_subscriptions').upsert({
+          espaco_id: sessao.espaco.id,
+          endpoint: subJson.endpoint,
+          p256dh: subJson.keys.p256dh,
+          auth: subJson.keys.auth,
+          user_agent: navigator.userAgent,
+        }, { onConflict: 'endpoint' })
+        if (error) throw error
+        setNotifAtivo(true)
+      }
+    } catch (e) {
+      toast?.erro(e.message || 'Erro ao configurar notificações.')
+    } finally {
+      setNotifCarregando(false)
+    }
+  }
 
   const carregarBriefing = useCallback(async () => {
     if (!sessao) return null
@@ -338,6 +398,19 @@ export default function JarvisHome() {
               aria-label={vozAutomatica ? 'Desativar resposta por voz' : 'Ativar resposta por voz'}
             >
               {falando ? <Volume2 size={14} /> : vozAutomatica ? <Volume1 size={14} /> : <VolumeX size={14} />}
+            </button>
+          )}
+          {pushSuportado && (
+            <button
+              type="button"
+              className="link-acao"
+              data-ativo={notifAtivo}
+              onClick={alternarNotificacoes}
+              disabled={notifCarregando}
+              title={notifAtivo ? 'Desativar notificações' : 'Ativar notificações'}
+              aria-label={notifAtivo ? 'Desativar notificações' : 'Ativar notificações'}
+            >
+              {notifAtivo ? <Bell size={14} /> : <BellOff size={14} />}
             </button>
           )}
           <button type="button" className="link-acao" onClick={novaConversa}>
