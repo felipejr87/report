@@ -38,6 +38,20 @@ export function useFala() {
   const [falando, setFalando] = useState(false)
   const suportado = typeof window !== 'undefined' && 'speechSynthesis' in window
 
+  // iOS Safari (principalmente em PWA standalone) só deixa falar() funcionar
+  // se ele acontecer "dentro" de um gesto direto do usuário — depois de um
+  // await (ex: esperar a resposta da API), o navegador já não considera mais
+  // gesto válido e o speak() é silenciosamente ignorado, sem erro nenhum.
+  // Chamar isso de forma síncrona no clique/onKeyDown (antes de qualquer
+  // await) "destrava" o motor de voz pro resto da sessão da página.
+  function desbloquear() {
+    if (!suportado) return
+    window.speechSynthesis.resume()
+    const u = new SpeechSynthesisUtterance('')
+    u.volume = 0
+    window.speechSynthesis.speak(u)
+  }
+
   function falar(texto) {
     if (!suportado) return
     window.speechSynthesis.cancel()
@@ -86,5 +100,5 @@ export function useFala() {
 
   useEffect(() => () => window.speechSynthesis.cancel(), [])
 
-  return { falar, pararFala, falando, suportado }
+  return { falar, pararFala, falando, suportado, desbloquear }
 }

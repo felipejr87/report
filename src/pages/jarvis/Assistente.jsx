@@ -30,13 +30,14 @@ export default function Assistente() {
   const [searchParams, setSearchParams] = useSearchParams()
   const msgInicialEnviada = useRef(false)
 
-  const { falar, pararFala, falando, suportado: falaSuportada } = useFala()
+  const { falar, pararFala, falando, suportado: falaSuportada, desbloquear } = useFala()
 
   function toggleVozAutomatica() {
     const novo = !vozAutomatica
     setVozAutomatica(novo)
     localStorage.setItem(CHAVE_VOZ_AUTO, String(novo))
-    if (!novo) pararFala()
+    if (novo) desbloquear()
+    else pararFala()
   }
 
   const cliente = sessao ? supabaseEspaco(sessao.token) : null
@@ -117,6 +118,10 @@ export default function Assistente() {
   async function enviar(textoOverride) {
     const texto = (textoOverride ?? input).trim()
     if (!texto || carregando) return
+
+    // Precisa ser síncrono, antes de qualquer await — depois do fetch o
+    // iOS já não considera mais "gesto do usuário" e o speak() é ignorado.
+    if (vozAutomatica) desbloquear()
 
     const historicoAtual = [...mensagens, { role: 'user', content: texto }]
     setMensagens(historicoAtual)
@@ -234,7 +239,7 @@ export default function Assistente() {
             type="button"
             className="chat-mic"
             data-ativo={escutando}
-            onClick={escutando ? pararEscuta : iniciarEscuta}
+            onClick={() => { if (!escutando && vozAutomatica) desbloquear(); (escutando ? pararEscuta : iniciarEscuta)() }}
             title={escutando ? 'Parar' : 'Falar'}
             aria-label={escutando ? 'Parar captura por voz' : 'Falar com o assistente'}
           >
