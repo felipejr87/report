@@ -101,15 +101,6 @@ export default function Entrada() {
               <button type="submit" className="btn-primario" disabled={carregando} style={{ marginTop: 'var(--space-sm)' }}>
                 {carregando ? 'Entrando...' : 'Entrar no espaço'}
               </button>
-
-              <button
-                type="button"
-                className="link-acao"
-                style={{ alignSelf: 'center' }}
-                onClick={() => { setModo('criar'); setErro('') }}
-              >
-                Criar novo espaço
-              </button>
             </form>
           ) : (
             <form onSubmit={handleCriar} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>

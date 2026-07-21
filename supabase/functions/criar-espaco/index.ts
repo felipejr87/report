@@ -9,6 +9,14 @@ serve(async (req) => {
   }
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
+  // Criação de novos espaços bloqueada por enquanto (pedido de
+  // 2026-07-21) — só o FE01 existe hoje, ainda não há necessidade real
+  // de suportar múltiplos espaços. Reverter é só remover este bloco.
+  return new Response(
+    JSON.stringify({ ok: false, erro: 'Criação de novos espaços está desativada no momento.' }),
+    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+
   try {
     const { codigo, nome, senha } = await req.json()
 
