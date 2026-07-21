@@ -105,6 +105,11 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
   transition: background-color var(--ease), color var(--ease);
+  /* apple-mobile-web-app-status-bar-style=black-translucent deixa o
+     conteúdo passar por baixo do relógio/bateria no iOS -- compensa
+     com o safe-area-inset. 0 em navegadores/telas sem notch/status
+     bar sobreposta, então é seguro deixar sempre ligado. */
+  padding-top: env(safe-area-inset-top);
 }
 
 button, input, select, textarea {
