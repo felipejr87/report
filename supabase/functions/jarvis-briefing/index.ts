@@ -21,12 +21,31 @@ function espacoIdDoToken(req: Request): string | null {
   }
 }
 
+const DESCRICOES_TEMPO: Record<'pt' | 'en', Record<number, string>> = {
+  pt: {
+    0: 'céu limpo', 1: 'poucas nuvens', 2: 'parcialmente nublado',
+    3: 'nublado', 45: 'neblina', 51: 'garoa leve', 61: 'chuva leve',
+    63: 'chuva moderada', 65: 'chuva intensa', 80: 'pancadas de chuva',
+    95: 'tempestade',
+  },
+  en: {
+    0: 'clear sky', 1: 'mostly clear', 2: 'partly cloudy',
+    3: 'overcast', 45: 'fog', 51: 'light drizzle', 61: 'light rain',
+    63: 'moderate rain', 65: 'heavy rain', 80: 'rain showers',
+    95: 'thunderstorm',
+  },
+}
+const TEMPO_VARIAVEL: Record<'pt' | 'en', string> = { pt: 'tempo variável', en: 'variable weather' }
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   try {
     const espacoId = espacoIdDoToken(req)
     if (!espacoId) return new Response(JSON.stringify({ ok: false, erro: 'Sessão inválida.' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+    const url = new URL(req.url)
+    const idioma: 'pt' | 'en' = url.searchParams.get('idioma') === 'en' ? 'en' : 'pt'
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
@@ -48,13 +67,7 @@ serve(async (req) => {
       const temp = Math.round(clima.current.temperature_2m)
       const probChuva = Math.max(...(clima.hourly?.precipitation_probability?.slice(0, 12) || [0]))
       const codigo = clima.current.weathercode
-      const descricoes: Record<number, string> = {
-        0: 'céu limpo', 1: 'poucas nuvens', 2: 'parcialmente nublado',
-        3: 'nublado', 45: 'neblina', 51: 'garoa leve', 61: 'chuva leve',
-        63: 'chuva moderada', 65: 'chuva intensa', 80: 'pancadas de chuva',
-        95: 'tempestade',
-      }
-      tempo = { temp, descricao: descricoes[codigo] || 'tempo variável', probChuva, chuva: clima.current.precipitation > 0 }
+      tempo = { temp, descricao: DESCRICOES_TEMPO[idioma][codigo] || TEMPO_VARIAVEL[idioma], probChuva, chuva: clima.current.precipitation > 0 }
     } catch {
       tempo = null
     }

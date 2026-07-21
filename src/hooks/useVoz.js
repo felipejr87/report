@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 
-export function useVoz({ onTranscricao, onErro }) {
+const ERRO_SEM_SUPORTE = { pt: 'Navegador não suporta reconhecimento de voz. Use o Chrome.', en: 'Browser does not support speech recognition. Use Chrome.' }
+
+export function useVoz({ onTranscricao, onErro, idioma = 'pt' }) {
   const reconhecimentoRef = useRef(null)
   const [escutando, setEscutando] = useState(false)
   const suportado = typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)
 
   function iniciarEscuta() {
     if (!suportado) {
-      onErro?.('Navegador não suporta reconhecimento de voz. Use o Chrome.')
+      onErro?.(ERRO_SEM_SUPORTE[idioma] || ERRO_SEM_SUPORTE.pt)
       return
     }
 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     const rec = new SR()
-    rec.lang = 'pt-BR'
+    // Butler britânico — en-GB no reconhecimento também, mais consistente
+    // com a persona quando o idioma ativo é inglês.
+    rec.lang = idioma === 'en' ? 'en-GB' : 'pt-BR'
     rec.interimResults = false
     rec.maxAlternatives = 1
 
@@ -34,7 +38,7 @@ export function useVoz({ onTranscricao, onErro }) {
   return { iniciarEscuta, pararEscuta, escutando, suportado }
 }
 
-export function useFala() {
+export function useFala(idioma = 'pt') {
   const [falando, setFalando] = useState(false)
   const suportado = typeof window !== 'undefined' && 'speechSynthesis' in window
 
@@ -66,18 +70,21 @@ export function useFala() {
       .trim()
     if (!textoLimpo) return
 
+    const langAlvo = idioma === 'en' ? 'en-GB' : 'pt-BR'
+    const prefixoAlvo = idioma === 'en' ? 'en' : 'pt'
+
     const utterance = new SpeechSynthesisUtterance(textoLimpo)
-    utterance.lang = 'pt-BR'
+    utterance.lang = langAlvo
     utterance.rate = 1.05
     utterance.pitch = 1.0
     utterance.volume = 1.0
 
     function selecionarVoz() {
       const vozes = window.speechSynthesis.getVoices()
-      const vozPtBR = vozes.find((v) => v.lang === 'pt-BR' && v.localService)
-        || vozes.find((v) => v.lang === 'pt-BR')
-        || vozes.find((v) => v.lang.startsWith('pt'))
-      if (vozPtBR) utterance.voice = vozPtBR
+      const voz = vozes.find((v) => v.lang === langAlvo && v.localService)
+        || vozes.find((v) => v.lang === langAlvo)
+        || vozes.find((v) => v.lang.startsWith(prefixoAlvo))
+      if (voz) utterance.voice = voz
     }
 
     if (window.speechSynthesis.getVoices().length > 0) {

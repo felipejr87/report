@@ -4,10 +4,12 @@ import { Trash2 } from 'lucide-react'
 import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
+import { useIdioma } from '../hooks/useIdioma'
+import { useTexto } from '../lib/i18n'
 import Header from '../components/Header'
 import TabBar from '../components/jarvis/TabBar'
 
-const DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+const DIAS = { pt: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], en: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] }
 const VAZIO_EVENTO = { titulo: '', data: '', hora: '' }
 
 function diasDaSemanaAtual() {
@@ -26,6 +28,9 @@ function diasDaSemanaAtual() {
 export default function Vida() {
   const { sessao, sair } = useAuth()
   const toast = useToast()
+  const { idioma } = useIdioma()
+  const t = useTexto()
+  const localeData = idioma === 'en' ? 'en-US' : 'pt-BR'
 
   const [pilares, setPilares] = useState([])
   const [objetivos, setObjetivos] = useState([])
@@ -146,18 +151,18 @@ export default function Vida() {
     <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', paddingBottom: isJarvis ? 76 : 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
       <Header espaco={sessao.espaco} onSair={sair} />
 
-      <h1 className="text-titulo">Sua vida</h1>
+      <h1 className="text-titulo">{t('sua_vida')}</h1>
 
       {erro && <p role="alert" className="campo-erro">{erro}</p>}
 
       {carregando ? (
-        <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
+        <p className="text-body" style={{ color: 'var(--text-dim)' }}>{t('carregando')}</p>
       ) : (
         <>
           <div className="jarvis-kpi">
-            <span className="text-label">Clientes reais pagantes</span>
+            <span className="text-label">{t('clientes_pagantes')}</span>
             <span className="jarvis-kpi-valor" data-zero={clientesPagantes === 0}>{clientesPagantes}</span>
-            <span className="text-micro">Ecossistemas · Pilar 3</span>
+            <span className="text-micro">{t('ecossistemas_pilar')}</span>
           </div>
 
           {pilares.map((pilar) => {
@@ -170,18 +175,18 @@ export default function Vida() {
                 <div className="pilar-cabecalho">
                   <span aria-hidden="true">{pilar.icone}</span>
                   <span>{pilar.nome}</span>
-                  {semCompromisso && <span className="badge-sem-compromisso">SEM COMPROMISSO</span>}
+                  {semCompromisso && <span className="badge-sem-compromisso">{t('sem_compromisso')}</span>}
                 </div>
 
                 {obsDoPilar.length === 0 ? (
-                  <p className="text-micro">Nenhum objetivo declarado.</p>
+                  <p className="text-micro">{t('nenhum_objetivo')}</p>
                 ) : (
                   <div>
                     {obsDoPilar.map((ob) => (
                       <div key={ob.id} className="objetivo-linha" data-status={ob.status}>
                         <span>{ob.descricao}</span>
                         {ob.prazo && (
-                          <span className="text-micro">→ {new Date(ob.prazo).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })}</span>
+                          <span className="text-micro">→ {new Date(ob.prazo).toLocaleDateString(localeData, { month: 'short', year: '2-digit' })}</span>
                         )}
                       </div>
                     ))}
@@ -192,13 +197,13 @@ export default function Vida() {
           })}
 
           <section className="detalhe-secao">
-            <h2 className="section-label">Hábitos — semana atual</h2>
+            <h2 className="section-label">{t('habitos_semana')}</h2>
             <div className="semana-grade">
               <span />
-              {DIAS.map((d) => <span key={d} className="semana-cabecalho">{d}</span>)}
+              {DIAS[idioma].map((d) => <span key={d} className="semana-cabecalho">{d}</span>)}
             </div>
             {habitos.length === 0 ? (
-              <p className="text-micro">Nenhum hábito ainda.</p>
+              <p className="text-micro">{t('nenhum_habito')}</p>
             ) : (
               habitos.map((h) => {
                 const totalSemana = semana.filter((data) => marcado(h.id, data)).length
@@ -226,21 +231,21 @@ export default function Vida() {
           </section>
 
           <section className="detalhe-secao">
-            <h2 className="section-label">Próximos eventos</h2>
+            <h2 className="section-label">{t('proximos_eventos')}</h2>
             {eventos.length === 0 ? (
-              <p className="text-micro">Nenhum evento agendado.</p>
+              <p className="text-micro">{t('nenhum_evento')}</p>
             ) : (
               <div className="lista">
                 {eventos.map((e) => (
                   <div key={e.id} className="item-atividade" style={{ cursor: 'default', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>
                       <span className="text-micro" style={{ marginRight: 8 }}>
-                        {new Date(e.inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                        {!e.dia_todo && ` ${new Date(e.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}
+                        {new Date(e.inicio).toLocaleDateString(localeData, { day: '2-digit', month: '2-digit' })}
+                        {!e.dia_todo && ` ${new Date(e.inicio).toLocaleTimeString(localeData, { hour: '2-digit', minute: '2-digit' })}`}
                       </span>
                       {e.titulo}
                     </span>
-                    <button type="button" className="link-acao" onClick={() => excluirEvento(e.id)} aria-label={`Excluir ${e.titulo}`}>
+                    <button type="button" className="link-acao" onClick={() => excluirEvento(e.id)} aria-label={`${t('excluir')} ${e.titulo}`}>
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -250,17 +255,17 @@ export default function Vida() {
 
             <div className="campo-grade-2" style={{ marginTop: 'var(--space-md)' }}>
               <label className="campo">
-                <span className="text-label">Novo evento</span>
-                <input value={novoEvento.titulo} onChange={(e) => setNovoEvento((p) => ({ ...p, titulo: e.target.value }))} placeholder="Título" />
+                <span className="text-label">{t('novo_evento')}</span>
+                <input value={novoEvento.titulo} onChange={(e) => setNovoEvento((p) => ({ ...p, titulo: e.target.value }))} placeholder={t('titulo_campo')} />
               </label>
               <label className="campo">
-                <span className="text-label">Data</span>
+                <span className="text-label">{t('data_campo')}</span>
                 <input type="date" value={novoEvento.data} onChange={(e) => setNovoEvento((p) => ({ ...p, data: e.target.value }))} />
               </label>
             </div>
             <div className="modal-rodape" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
               <button type="button" className="btn-primario" onClick={criarEvento} disabled={!novoEvento.titulo.trim() || !novoEvento.data || enviandoEvento}>
-                {enviandoEvento ? 'Adicionando...' : 'Adicionar evento'}
+                {enviandoEvento ? t('adicionando') : t('adicionar_evento')}
               </button>
             </div>
           </section>

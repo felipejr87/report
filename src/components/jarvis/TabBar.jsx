@@ -1,14 +1,17 @@
 import { NavLink } from 'react-router-dom'
 import { Sparkles, Compass, FolderKanban, Wallet } from 'lucide-react'
-
-const ABAS = [
-  { to: '/jarvis', label: 'Jarvis', Icone: Sparkles, fim: true },
-  { to: '/vida', label: 'Vida', Icone: Compass },
-  { to: '/projetos', label: 'Projetos', Icone: FolderKanban },
-  { to: '/financeiro', label: 'Financeiro', Icone: Wallet },
-]
+import { useTexto } from '../../lib/i18n'
 
 export default function TabBar() {
+  const t = useTexto()
+
+  const ABAS = [
+    { to: '/jarvis', label: t('tab_jarvis'), Icone: Sparkles, fim: true },
+    { to: '/vida', label: t('tab_vida'), Icone: Compass },
+    { to: '/projetos', label: t('tab_projetos'), Icone: FolderKanban },
+    { to: '/financeiro', label: t('tab_financeiro'), Icone: Wallet },
+  ]
+
   return (
     <nav className="tab-bar">
       {ABAS.map(({ to, label, Icone, fim }) => (

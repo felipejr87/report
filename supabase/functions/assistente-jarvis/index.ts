@@ -172,7 +172,8 @@ serve(async (req) => {
       return jsonResponse({ ok: false, erro: 'Assistente disponível apenas para o espaço Jarvis.' }, 403)
     }
 
-    const { mensagens, confirmar_acao } = await req.json()
+    const { mensagens, confirmar_acao, idioma: idiomaBody } = await req.json()
+    const idioma: 'pt' | 'en' = idiomaBody === 'en' ? 'en' : 'pt'
 
     // =====================================================
     // CONFIRMAÇÃO DE AÇÃO PENDENTE — executa direto, sem passar pelo
@@ -181,10 +182,10 @@ serve(async (req) => {
     // =====================================================
     if (confirmar_acao?.tool) {
       try {
-        const resultado = await executarFerramenta(confirmar_acao.tool, confirmar_acao.input, espacoId, supabase)
+        const resultado = await executarFerramenta(confirmar_acao.tool, confirmar_acao.input, espacoId, supabase, idioma)
         return jsonResponse({ ok: true, acao_executada: resultado })
       } catch (e) {
-        return jsonResponse({ ok: false, erro: e instanceof Error ? e.message : 'Erro ao executar.' }, 500)
+        return jsonResponse({ ok: false, erro: e instanceof Error ? e.message : (idioma === 'en' ? 'Error executing.' : 'Erro ao executar.') }, 500)
       }
     }
 
@@ -383,6 +384,20 @@ CONTEXTO EM TEMPO REAL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${contexto}`
 
+    // Diretiva de idioma — Felipe usa o toggle EN pra treinar inglês.
+    // Não duplica a persona inteira: só instrui a trocar o idioma da
+    // resposta, mantendo tom/humor/estrutura como estão definidos acima.
+    const systemPromptFinal = idioma === 'en'
+      ? `${systemPrompt}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LANGUAGE FOR THIS CONVERSATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Felipe is practicing English right now. Respond entirely in English —
+same persona, tone and dry British humor, just the language changes.
+Proper nouns (Felpsz, AURA, project names) stay as-is.`
+      : systemPrompt
+
     // =====================================================
     // LOOP — ferramentas de leitura executam direto; ferramentas de
     // escrita interrompem o loop e retornam uma proposta de confirmação.
@@ -405,7 +420,7 @@ ${contexto}`
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 1024,
-          system: systemPrompt,
+          system: systemPromptFinal,
           tools: TOOLS,
           messages: msgAtual,
         }),
@@ -413,7 +428,7 @@ ${contexto}`
 
       if (!anthropicRes.ok) {
         console.error('[assistente-jarvis] Anthropic respondeu', anthropicRes.status, await anthropicRes.text())
-        return jsonResponse({ ok: false, erro: 'Erro ao consultar o assistente.' }, 502)
+        return jsonResponse({ ok: false, erro: idioma === 'en' ? 'Error consulting the assistant.' : 'Erro ao consultar o assistente.' }, 502)
       }
 
       const resultado = await anthropicRes.json()
@@ -423,7 +438,7 @@ ${contexto}`
         const blocoEscrita = resultado.content.find((b: any) => b.type === 'tool_use' && FERRAMENTAS_ESCRITA.includes(b.name))
 
         if (blocoEscrita) {
-          const descricao = gerarDescricao(blocoEscrita.name, blocoEscrita.input)
+          const descricao = gerarDescricao(blocoEscrita.name, blocoEscrita.input, idioma)
           const textoProposta = resultado.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
           return jsonResponse({
             ok: true,
@@ -434,13 +449,15 @@ ${contexto}`
         }
 
         // Só ferramentas de leitura chegam aqui — executa e continua o loop.
+        // O resultado é consumido pelo modelo (que já responde no idioma
+        // certo), então não precisa ser traduzido aqui.
         msgAtual.push({ role: 'assistant', content: resultado.content })
         const toolResults = []
         for (const block of resultado.content) {
           if (block.type !== 'tool_use') continue
           let toolResult = ''
           try {
-            toolResult = await executarFerramenta(block.name, block.input, espacoId, supabase)
+            toolResult = await executarFerramenta(block.name, block.input, espacoId, supabase, idioma)
           } catch (e) {
             toolResult = `Erro ao executar ${block.name}: ${e instanceof Error ? e.message : String(e)}`
           }
@@ -454,36 +471,48 @@ ${contexto}`
       break
     }
 
-    return jsonResponse({ ok: true, resposta: respostaFinal || 'Não consegui gerar uma resposta.' })
+    return jsonResponse({ ok: true, resposta: respostaFinal || (idioma === 'en' ? 'Could not generate a response.' : 'Não consegui gerar uma resposta.') })
   } catch (e) {
     console.error('[assistente-jarvis]', e)
     return jsonResponse({ ok: false, erro: e instanceof Error ? e.message : 'Erro interno.' }, 500)
   }
 })
 
-function gerarDescricao(tool: string, input: any): string {
+function gerarDescricao(tool: string, input: any, idioma: 'pt' | 'en'): string {
+  const en = idioma === 'en'
   switch (tool) {
     case 'criar_lancamento':
-      return `Criar "${input.descricao}" (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) em ${input.data}, conta ${input.conta === 'cartao' ? 'cartão' : 'corrente'}.`
+      return en
+        ? `Create "${input.descricao}" (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) on ${input.data}, ${input.conta === 'cartao' ? 'credit card' : 'checking'} account.`
+        : `Criar "${input.descricao}" (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) em ${input.data}, conta ${input.conta === 'cartao' ? 'cartão' : 'corrente'}.`
     case 'criar_lancamentos_lote': {
       const total = input.lancamentos.reduce((s: number, l: any) => s + Math.abs(l.valor), 0)
-      return `Criar ${input.lancamentos.length} lançamentos — total R$${total.toFixed(2)}.`
+      return en
+        ? `Create ${input.lancamentos.length} entries — total R$${total.toFixed(2)}.`
+        : `Criar ${input.lancamentos.length} lançamentos — total R$${total.toFixed(2)}.`
     }
     case 'atualizar_divida':
-      return `Atualizar "${input.nome_divida}" → saldo R$${input.novo_saldo}.`
+      return en
+        ? `Update "${input.nome_divida}" → balance R$${input.novo_saldo}.`
+        : `Atualizar "${input.nome_divida}" → saldo R$${input.novo_saldo}.`
     case 'criar_atividade':
-      return `Criar atividade "${input.nome}" em "${input.projeto_nome}".`
+      return en
+        ? `Create task "${input.nome}" in "${input.projeto_nome}".`
+        : `Criar atividade "${input.nome}" em "${input.projeto_nome}".`
     case 'criar_evento':
-      return `Criar evento "${input.titulo}" em ${new Date(input.inicio).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
+      return en
+        ? `Create event "${input.titulo}" at ${new Date(input.inicio).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
+        : `Criar evento "${input.titulo}" em ${new Date(input.inicio).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
     default:
-      return `Executar: ${tool}`
+      return en ? `Run: ${tool}` : `Executar: ${tool}`
   }
 }
 
 // =====================================================
 // EXECUÇÃO REAL DAS FERRAMENTAS NO SUPABASE
 // =====================================================
-async function executarFerramenta(nome: string, input: any, espacoId: string, supabase: any): Promise<string> {
+async function executarFerramenta(nome: string, input: any, espacoId: string, supabase: any, idioma: 'pt' | 'en' = 'pt'): Promise<string> {
+  const en = idioma === 'en'
   switch (nome) {
     case 'criar_lancamento': {
       const { error } = await supabase.from('lancamentos').insert({
@@ -495,7 +524,9 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
         data: input.data,
       })
       if (error) throw new Error(error.message)
-      return `Lançamento criado: ${input.descricao} (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}).`
+      return en
+        ? `Entry created: ${input.descricao} (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}).`
+        : `Lançamento criado: ${input.descricao} (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}).`
     }
 
     case 'criar_lancamentos_lote': {
@@ -510,16 +541,20 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
       const { error } = await supabase.from('lancamentos').insert(itens)
       if (error) throw new Error(error.message)
       const total = itens.reduce((s: number, l: any) => s + l.valor, 0)
-      return `${itens.length} lançamentos criados. Total: R$${total.toFixed(2)}.`
+      return en
+        ? `${itens.length} entries created. Total: R$${total.toFixed(2)}.`
+        : `${itens.length} lançamentos criados. Total: R$${total.toFixed(2)}.`
     }
 
     case 'atualizar_divida': {
       const { data: dividasDoEspaco } = await supabase.from('dividas').select('id, nome').eq('espaco_id', espacoId).eq('ativa', true)
       const divida = dividasDoEspaco?.find((d: any) => d.nome.toLowerCase().includes(input.nome_divida.toLowerCase()))
-      if (!divida) return `Dívida "${input.nome_divida}" não encontrada.`
+      if (!divida) return en ? `Debt "${input.nome_divida}" not found.` : `Dívida "${input.nome_divida}" não encontrada.`
       const { error } = await supabase.from('dividas').update({ saldo_atual: input.novo_saldo }).eq('id', divida.id)
       if (error) throw new Error(error.message)
-      return `Saldo de "${divida.nome}" atualizado para R$${input.novo_saldo.toFixed(2)}.`
+      return en
+        ? `Balance of "${divida.nome}" updated to R$${input.novo_saldo.toFixed(2)}.`
+        : `Saldo de "${divida.nome}" atualizado para R$${input.novo_saldo.toFixed(2)}.`
     }
 
     case 'salvar_perfil': {
@@ -529,13 +564,17 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
       if (input.preferencias) dados.preferencias = input.preferencias
       const { error } = await supabase.from('jarvis_perfil').upsert(dados, { onConflict: 'espaco_id' })
       if (error) throw new Error(error.message)
-      return `Perfil atualizado.`
+      return en ? 'Profile updated.' : 'Perfil atualizado.'
     }
 
     case 'criar_atividade': {
       const { data: projetosDoEspaco } = await supabase.from('projetos').select('id, nome').eq('espaco_id', espacoId)
       const projeto = projetosDoEspaco?.find((p: any) => p.nome.toLowerCase().includes(input.projeto_nome.toLowerCase()))
-      if (!projeto) return `Projeto "${input.projeto_nome}" não encontrado. Disponíveis: ${projetosDoEspaco?.map((p: any) => p.nome).join(', ')}`
+      if (!projeto) {
+        return en
+          ? `Project "${input.projeto_nome}" not found. Available: ${projetosDoEspaco?.map((p: any) => p.nome).join(', ')}`
+          : `Projeto "${input.projeto_nome}" não encontrado. Disponíveis: ${projetosDoEspaco?.map((p: any) => p.nome).join(', ')}`
+      }
       const { error } = await supabase.from('atividades').insert({
         espaco_id: espacoId,
         projeto_id: projeto.id,
@@ -546,7 +585,9 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
         data_fim: input.prazo || null,
       })
       if (error) throw new Error(error.message)
-      return `Atividade "${input.nome}" criada em "${projeto.nome}".`
+      return en
+        ? `Task "${input.nome}" created in "${projeto.nome}".`
+        : `Atividade "${input.nome}" criada em "${projeto.nome}".`
     }
 
     case 'criar_evento': {
@@ -558,7 +599,7 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
         pilar_id: input.pilar_id || null,
       })
       if (error) throw new Error(error.message)
-      return `Evento "${input.titulo}" criado.`
+      return en ? `Event "${input.titulo}" created.` : `Evento "${input.titulo}" criado.`
     }
 
     case 'buscar_contexto': {

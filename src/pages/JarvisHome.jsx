@@ -3,6 +3,8 @@ import { Navigate, useSearchParams } from 'react-router-dom'
 import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check, Umbrella, Bell, BellOff } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
+import { useIdioma } from '../hooks/useIdioma'
+import { useTexto } from '../lib/i18n'
 import { supabaseEspaco, urlFuncao } from '../lib/supabase'
 import { useVoz, useFala } from '../hooks/useVoz'
 import Header from '../components/Header'
@@ -34,34 +36,67 @@ function renderMsg(texto) {
 // Frases curtas, tom J.A.R.V.I.S. — diretas, sem clichê de pôster
 // motivacional. Uma por período, sorteada a cada nova conversa.
 const FRASES_MOTIVACIONAIS = {
-  manha: [
-    'O dia começa agora — o resto é execução.',
-    'Prioridade clara vale mais que agenda cheia.',
-    'Um problema resolvido hoje não some, mas para de crescer.',
-    'Menos abas abertas, mais coisa entregue.',
-    'Disciplina de hoje é o resultado de outubro.',
-  ],
-  tarde: [
-    'Metade do caminho andado. Segue no ritmo.',
-    'Ajusta a rota, não precisa recomeçar.',
-    'O que já rendeu, rendeu. Próximo passo.',
-    'Sem pressa, sem parar.',
-    'Tarde de continuar, não de justificar.',
-  ],
-  noite: [
-    'O dia não precisa ser perfeito pra ter valido.',
-    'Fechar bem hoje abre bem amanhã.',
-    'Descansar é parte do plano, não desvio dele.',
-    'O que não foi feito espera. Você, não.',
-    'Silêncio agora, retomada amanhã.',
-  ],
+  pt: {
+    manha: [
+      'O dia começa agora — o resto é execução.',
+      'Prioridade clara vale mais que agenda cheia.',
+      'Um problema resolvido hoje não some, mas para de crescer.',
+      'Menos abas abertas, mais coisa entregue.',
+      'Disciplina de hoje é o resultado de outubro.',
+    ],
+    tarde: [
+      'Metade do caminho andado. Segue no ritmo.',
+      'Ajusta a rota, não precisa recomeçar.',
+      'O que já rendeu, rendeu. Próximo passo.',
+      'Sem pressa, sem parar.',
+      'Tarde de continuar, não de justificar.',
+    ],
+    noite: [
+      'O dia não precisa ser perfeito pra ter valido.',
+      'Fechar bem hoje abre bem amanhã.',
+      'Descansar é parte do plano, não desvio dele.',
+      'O que não foi feito espera. Você, não.',
+      'Silêncio agora, retomada amanhã.',
+    ],
+  },
+  en: {
+    manha: [
+      'The day starts now — the rest is execution.',
+      'A clear priority beats a full calendar.',
+      "A problem solved today stops growing, even if it doesn't vanish.",
+      'Fewer open tabs, more delivered work.',
+      "Today's discipline is October's result.",
+    ],
+    tarde: [
+      'Halfway there. Keep the pace.',
+      'Adjust course, no need to restart.',
+      "What's done is done. Next step.",
+      'No rush, no stopping.',
+      'An afternoon for continuing, not justifying.',
+    ],
+    noite: [
+      "The day doesn't need to be perfect to have counted.",
+      'Closing well today opens well tomorrow.',
+      'Resting is part of the plan, not a detour from it.',
+      "What wasn't done will wait. You won't.",
+      'Quiet now, resume tomorrow.',
+    ],
+  },
 }
 
-function frase(periodo) {
-  const opcoes = FRASES_MOTIVACIONAIS[periodo]
+function frase(idioma, periodo) {
+  const opcoes = FRASES_MOTIVACIONAIS[idioma]?.[periodo] || FRASES_MOTIVACIONAIS.pt[periodo]
   return opcoes[Math.floor(Math.random() * opcoes.length)]
 }
 
+const SAUDACAO_PALAVRA = {
+  pt: { manha: 'Bom dia', tarde: 'Boa tarde', noite: 'Boa noite' },
+  en: { manha: 'Good morning', tarde: 'Good afternoon', noite: 'Good evening' },
+}
+
+// dados.saudacao vem do jarvis-briefing sempre em pt (é só uma chave de
+// classificação de período, não texto exibido — a palavra mostrada usa
+// SAUDACAO_PALAVRA[idioma] separadamente).
 function periodoDe(saudacao) {
   if (saudacao === 'Bom dia') return 'manha'
   if (saudacao === 'Boa tarde') return 'tarde'
@@ -72,50 +107,81 @@ function horaEvento(iso) {
   return new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
 }
 
+// Fragmentos de texto do digest, por idioma — usados só dentro de
+// montarSaudacao, então ficam colados nela em vez de ir pro i18n.js
+// (que é só pras strings estáticas de botão/label).
+const TEXTO_SAUDACAO = {
+  pt: {
+    agenda: (lista) => `Agenda: ${lista}.`,
+    agendaLivre: 'Agenda livre hoje.',
+    prioridade: (nome) => `Prioridade: "${nome}" vence em breve.`,
+    parada: (nome) => `"${nome}" está parada há dias — vale um empurrão.`,
+    proximoCompromisso: (titulo, hora) => `Próximo compromisso: ${titulo} às ${hora}.`,
+    habitosPendentes: (lista) => `Ainda sem marcar: ${lista}.`,
+    amanha: (nome) => `Amanhã: "${nome}" tem prioridade.`,
+    paradaAtencao: (nome) => `"${nome}" pede atenção antes que vire urgência.`,
+    oQuePrecisa: 'O que precisa?',
+    encerramento: 'Como fecha o dia — tudo em dia ou ficou algo solto pra amanhã?',
+    chuva: (pct) => ` — ${pct}% de chance de chuva`,
+  },
+  en: {
+    agenda: (lista) => `Schedule: ${lista}.`,
+    agendaLivre: 'Schedule is clear today.',
+    prioridade: (nome) => `Priority: "${nome}" is due soon.`,
+    parada: (nome) => `"${nome}" has been stalled for days — worth a push.`,
+    proximoCompromisso: (titulo, hora) => `Next up: ${titulo} at ${hora}.`,
+    habitosPendentes: (lista) => `Still unchecked: ${lista}.`,
+    amanha: (nome) => `Tomorrow: "${nome}" takes priority.`,
+    paradaAtencao: (nome) => `"${nome}" needs attention before it becomes urgent.`,
+    oQuePrecisa: 'What do you need?',
+    encerramento: 'How did the day close — all settled or something left loose for tomorrow?',
+    chuva: (pct) => ` — ${pct}% chance of rain`,
+  },
+}
+
 // Constrói a saudação inicial usando o briefing (clima/agenda/atividades)
 // já carregado — conteúdo muda de peso conforme o período do dia:
 // manhã = digest completo, tarde = leve, noite = sugestões + fechamento.
-function montarSaudacao(dados) {
+function montarSaudacao(dados, idioma) {
+  const lang = idioma === 'en' ? 'en' : 'pt'
+  const s = TEXTO_SAUDACAO[lang]
   const agoraFallback = new Date().getHours()
+
   if (!dados) {
-    const saud = agoraFallback < 12 ? 'Bom dia' : agoraFallback < 18 ? 'Boa tarde' : 'Boa noite'
-    return `${saud}, Felipe. O que precisa?`
+    const periodoFallback = agoraFallback < 12 ? 'manha' : agoraFallback < 18 ? 'tarde' : 'noite'
+    return `${SAUDACAO_PALAVRA[lang][periodoFallback]}, Felipe. ${s.oQuePrecisa}`
   }
 
   const periodo = periodoDe(dados.saudacao)
-  const dia = dados.diaSemana.charAt(0).toUpperCase() + dados.diaSemana.slice(1)
-  const linhas = [`${dados.saudacao}, Felipe. ${dia}, ${dados.hora}.`]
+  const dia = new Date().toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { weekday: 'long' })
+  const diaCap = dia.charAt(0).toUpperCase() + dia.slice(1)
+  const linhas = [`${SAUDACAO_PALAVRA[lang][periodo]}, Felipe. ${diaCap}, ${dados.hora}.`]
 
   if (periodo === 'manha') {
     if (dados.tempo) {
-      const chuva = dados.tempo.probChuva > 40 ? ` — ${dados.tempo.probChuva}% de chance de chuva` : ''
+      const chuva = dados.tempo.probChuva > 40 ? s.chuva(dados.tempo.probChuva) : ''
       linhas.push(`${dados.tempo.temp}°C, ${dados.tempo.descricao}${chuva}.`)
     }
     linhas.push(
       dados.eventosHoje.length > 0
-        ? `Agenda: ${dados.eventosHoje.slice(0, 3).map((e) => `${horaEvento(e.inicio)} ${e.titulo}`).join('; ')}.`
-        : 'Agenda livre hoje.'
+        ? s.agenda(dados.eventosHoje.slice(0, 3).map((e) => `${horaEvento(e.inicio)} ${e.titulo}`).join('; '))
+        : s.agendaLivre
     )
-    if (dados.urgentes.length > 0) {
-      linhas.push(`Prioridade: "${dados.urgentes[0].nome}" vence em breve.`)
-    } else if (dados.paradas.length > 0) {
-      linhas.push(`"${dados.paradas[0].nome}" está parada há dias — vale um empurrão.`)
-    }
-    linhas.push(frase('manha'))
-    linhas.push('O que precisa?')
+    if (dados.urgentes.length > 0) linhas.push(s.prioridade(dados.urgentes[0].nome))
+    else if (dados.paradas.length > 0) linhas.push(s.parada(dados.paradas[0].nome))
+    linhas.push(frase(lang, 'manha'))
+    linhas.push(s.oQuePrecisa)
   } else if (periodo === 'tarde') {
     const proximo = dados.eventosHoje.find((e) => new Date(e.inicio) > new Date())
-    if (proximo) linhas.push(`Próximo compromisso: ${proximo.titulo} às ${horaEvento(proximo.inicio)}.`)
-    linhas.push(frase('tarde'))
-    linhas.push('O que precisa?')
+    if (proximo) linhas.push(s.proximoCompromisso(proximo.titulo, horaEvento(proximo.inicio)))
+    linhas.push(frase(lang, 'tarde'))
+    linhas.push(s.oQuePrecisa)
   } else {
-    if (dados.habitosPendentes.length > 0) {
-      linhas.push(`Ainda sem marcar: ${dados.habitosPendentes.slice(0, 2).map((h) => h.nome).join(', ')}.`)
-    }
-    if (dados.urgentes.length > 0) linhas.push(`Amanhã: "${dados.urgentes[0].nome}" tem prioridade.`)
-    if (dados.paradas.length > 0) linhas.push(`"${dados.paradas[0].nome}" pede atenção antes que vire urgência.`)
-    linhas.push(frase('noite'))
-    linhas.push('Como fecha o dia — tudo em dia ou ficou algo solto pra amanhã?')
+    if (dados.habitosPendentes.length > 0) linhas.push(s.habitosPendentes(dados.habitosPendentes.slice(0, 2).map((h) => h.nome).join(', ')))
+    if (dados.urgentes.length > 0) linhas.push(s.amanha(dados.urgentes[0].nome))
+    if (dados.paradas.length > 0) linhas.push(s.paradaAtencao(dados.paradas[0].nome))
+    linhas.push(frase(lang, 'noite'))
+    linhas.push(s.encerramento)
   }
 
   return linhas.join('\n')
@@ -124,6 +190,9 @@ function montarSaudacao(dados) {
 export default function JarvisHome() {
   const { sessao, sair } = useAuth()
   const toast = useToast()
+  const { idioma } = useIdioma()
+  const t = useTexto()
+  const localeData = idioma === 'en' ? 'en-US' : 'pt-BR'
   const [conversas, setConversas] = useState([])
   const [conversaId, setConversaId] = useState(null)
   const [mensagens, setMensagens] = useState([])
@@ -140,7 +209,7 @@ export default function JarvisHome() {
   const [searchParams, setSearchParams] = useSearchParams()
   const msgInicialEnviada = useRef(false)
 
-  const { falar, pararFala, falando, suportado: falaSuportada, desbloquear } = useFala()
+  const { falar, pararFala, falando, suportado: falaSuportada, desbloquear } = useFala(idioma)
 
   function toggleVozAutomatica() {
     const novo = !vozAutomatica
@@ -161,7 +230,7 @@ export default function JarvisHome() {
   }, [])
 
   async function alternarNotificacoes() {
-    if (!pushSuportado || !cliente) { toast?.erro('Notificações push não são suportadas neste navegador.'); return }
+    if (!pushSuportado || !cliente) { toast?.erro(t('notif_nao_suportada')); return }
     setNotifCarregando(true)
     try {
       const reg = await navigator.serviceWorker.ready
@@ -174,7 +243,7 @@ export default function JarvisHome() {
         setNotifAtivo(false)
       } else {
         const permissao = await Notification.requestPermission()
-        if (permissao !== 'granted') { toast?.erro('Permissão de notificação negada.'); return }
+        if (permissao !== 'granted') { toast?.erro(t('permissao_negada')); return }
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
@@ -191,7 +260,7 @@ export default function JarvisHome() {
         setNotifAtivo(true)
       }
     } catch (e) {
-      toast?.erro(e.message || 'Erro ao configurar notificações.')
+      toast?.erro(e.message || t('erro_notif'))
     } finally {
       setNotifCarregando(false)
     }
@@ -200,7 +269,7 @@ export default function JarvisHome() {
   const carregarBriefing = useCallback(async () => {
     if (!sessao) return null
     try {
-      const res = await fetch(urlFuncao('jarvis-briefing'), { headers: { Authorization: `Bearer ${sessao.token}` } })
+      const res = await fetch(`${urlFuncao('jarvis-briefing')}?idioma=${idioma}`, { headers: { Authorization: `Bearer ${sessao.token}` } })
       const data = await res.json()
       if (data.ok) { setBriefing(data); return data }
       return null
@@ -209,7 +278,7 @@ export default function JarvisHome() {
       return null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessao?.token])
+  }, [sessao?.token, idioma])
 
   const carregarConversas = useCallback(async () => {
     if (!cliente) return
@@ -225,9 +294,9 @@ export default function JarvisHome() {
     setAcaoPendente(null)
 
     const dados = await carregarBriefing()
-    setMensagens([{ role: 'assistant', content: montarSaudacao(dados) }])
+    setMensagens([{ role: 'assistant', content: montarSaudacao(dados, idioma) }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessao?.token, carregarBriefing])
+  }, [sessao?.token, carregarBriefing, idioma])
 
   useEffect(() => { carregarConversas(); novaConversa() }, [carregarConversas, novaConversa])
   useEffect(() => { rodapeRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens, acaoPendente])
@@ -293,10 +362,10 @@ export default function JarvisHome() {
       const res = await fetch(urlFuncao('assistente-jarvis'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessao.token}` },
-        body: JSON.stringify({ mensagens: historicoAtual.map((m) => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({ mensagens: historicoAtual.map((m) => ({ role: m.role, content: m.content })), idioma }),
       })
       const data = await res.json()
-      const respostaAssistente = res.ok && data.ok ? data.resposta : (data.erro || 'Erro ao processar. Tente novamente.')
+      const respostaAssistente = res.ok && data.ok ? data.resposta : (data.erro || t('erro_processar'))
       if (!(res.ok && data.ok)) toast?.erro(respostaAssistente)
 
       const novoHistorico = [...historicoAtual, { role: 'assistant', content: respostaAssistente }]
@@ -305,7 +374,7 @@ export default function JarvisHome() {
       if (vozAutomatica) falar(respostaAssistente)
       await persistirConversa(novoHistorico, texto)
     } catch {
-      setMensagens((prev) => [...prev, { role: 'assistant', content: 'Erro de conexão. Verifique sua internet.' }])
+      setMensagens((prev) => [...prev, { role: 'assistant', content: t('erro_conexao') }])
     }
     setCarregando(false)
   }
@@ -317,10 +386,10 @@ export default function JarvisHome() {
       const res = await fetch(urlFuncao('assistente-jarvis'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessao.token}` },
-        body: JSON.stringify({ confirmar_acao: { tool: acaoPendente.tool, input: acaoPendente.input } }),
+        body: JSON.stringify({ confirmar_acao: { tool: acaoPendente.tool, input: acaoPendente.input }, idioma }),
       })
       const data = await res.json()
-      const texto = res.ok && data.ok ? data.acao_executada : (data.erro || 'Erro ao executar.')
+      const texto = res.ok && data.ok ? data.acao_executada : (data.erro || t('erro_processar'))
       const msg = { role: 'assistant', content: `✓ ${texto}` }
       const novoHistorico = [...mensagens, msg]
       setMensagens(novoHistorico)
@@ -329,21 +398,23 @@ export default function JarvisHome() {
       await persistirConversa(novoHistorico, texto, 1)
       carregarBriefing()
     } catch {
-      toast?.erro('Erro de conexão ao confirmar.')
+      toast?.erro(t('erro_conexao_confirmar'))
     }
     setConfirmando(false)
   }
 
   async function cancelarAcao() {
     setAcaoPendente(null)
-    const novoHistorico = [...mensagens, { role: 'assistant', content: 'Cancelado.' }]
+    const textoCancelado = t('cancelado')
+    const novoHistorico = [...mensagens, { role: 'assistant', content: textoCancelado }]
     setMensagens(novoHistorico)
-    await persistirConversa(novoHistorico, 'Cancelado.', 1)
+    await persistirConversa(novoHistorico, textoCancelado, 1)
   }
 
   const { iniciarEscuta, pararEscuta, escutando, suportado } = useVoz({
     onTranscricao: (texto) => enviar(texto),
-    onErro: (e) => toast?.erro(typeof e === 'string' ? e : 'Erro na captura por voz.'),
+    onErro: (e) => toast?.erro(typeof e === 'string' ? e : t('erro_captura_voz')),
+    idioma,
   })
 
   const isJarvis = sessao.espaco.jarvis_enabled === true
@@ -368,7 +439,7 @@ export default function JarvisHome() {
             <div className="bv-eventos-inline">
               {briefing.eventosHoje.slice(0, 2).map((e, i) => (
                 <span key={i} className="bv-ev">
-                  <span className="bv-ev-hora">{new Date(e.inicio).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="bv-ev-hora">{new Date(e.inicio).toLocaleTimeString(localeData, { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}</span>
                   {e.titulo}
                 </span>
               ))}
@@ -376,7 +447,7 @@ export default function JarvisHome() {
           )}
           {(briefing.urgentes?.length > 0 || briefing.paradas?.length > 0) && (
             <div className="bv-sugestao-inline">
-              → {briefing.urgentes?.length > 0 ? `"${briefing.urgentes[0].nome}" — prazo próximo` : `"${briefing.paradas[0].nome}" parada há dias`}
+              → {briefing.urgentes?.length > 0 ? `"${briefing.urgentes[0].nome}" — ${t('prazo_proximo')}` : `"${briefing.paradas[0].nome}" ${t('parada_dias')}`}
             </div>
           )}
         </div>
@@ -385,7 +456,7 @@ export default function JarvisHome() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button type="button" className="btn-secundario" onClick={() => setMostrarHistorico((v) => !v)}>
           <History size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
-          Histórico
+          {t('historico')}
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
           {falaSuportada && (
@@ -394,8 +465,8 @@ export default function JarvisHome() {
               className="link-acao"
               data-ativo={vozAutomatica}
               onClick={toggleVozAutomatica}
-              title={vozAutomatica ? 'Desativar resposta por voz' : 'Ativar resposta por voz'}
-              aria-label={vozAutomatica ? 'Desativar resposta por voz' : 'Ativar resposta por voz'}
+              title={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
+              aria-label={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
             >
               {falando ? <Volume2 size={14} /> : vozAutomatica ? <Volume1 size={14} /> : <VolumeX size={14} />}
             </button>
@@ -407,15 +478,15 @@ export default function JarvisHome() {
               data-ativo={notifAtivo}
               onClick={alternarNotificacoes}
               disabled={notifCarregando}
-              title={notifAtivo ? 'Desativar notificações' : 'Ativar notificações'}
-              aria-label={notifAtivo ? 'Desativar notificações' : 'Ativar notificações'}
+              title={notifAtivo ? t('desativar_notif') : t('ativar_notif')}
+              aria-label={notifAtivo ? t('desativar_notif') : t('ativar_notif')}
             >
               {notifAtivo ? <Bell size={14} /> : <BellOff size={14} />}
             </button>
           )}
           <button type="button" className="link-acao" onClick={novaConversa}>
             <Plus size={14} />
-            Nova conversa
+            {t('nova_conversa')}
           </button>
         </div>
       </div>
@@ -423,12 +494,12 @@ export default function JarvisHome() {
       {mostrarHistorico && (
         <div className="historico-sidebar">
           <div className="historico-header">
-            <span className="text-titulo" style={{ fontSize: 14 }}>Conversas anteriores</span>
-            <button type="button" className="modal-fechar" onClick={() => setMostrarHistorico(false)} aria-label="Fechar">
+            <span className="text-titulo" style={{ fontSize: 14 }}>{t('conversas_anteriores')}</span>
+            <button type="button" className="modal-fechar" onClick={() => setMostrarHistorico(false)} aria-label={t('fechar')}>
               <X size={16} />
             </button>
           </div>
-          {conversas.length === 0 && <p className="text-micro" style={{ padding: 'var(--space-md)' }}>Nenhuma conversa salva ainda.</p>}
+          {conversas.length === 0 && <p className="text-micro" style={{ padding: 'var(--space-md)' }}>{t('nenhuma_conversa')}</p>}
           {conversas.map((c) => (
             <button
               key={c.id}
@@ -437,8 +508,8 @@ export default function JarvisHome() {
               data-ativo={c.id === conversaId}
               onClick={() => carregarConversa(c.id)}
             >
-              <span className="hist-titulo">{c.titulo || 'Conversa'}</span>
-              <span className="hist-data">{new Date(c.atualizado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+              <span className="hist-titulo">{c.titulo || t('conversa_padrao')}</span>
+              <span className="hist-data">{new Date(c.atualizado_em).toLocaleDateString(localeData, { day: '2-digit', month: '2-digit' })}</span>
             </button>
           ))}
         </div>
@@ -451,7 +522,7 @@ export default function JarvisHome() {
             <div className="chat-msg-corpo">
               <div className="chat-bubble" dangerouslySetInnerHTML={{ __html: renderMsg(m.content) }} />
               {m.role === 'assistant' && falaSuportada && (
-                <button type="button" className="btn-ouvir-msg" onClick={() => falar(m.content)} title="Ouvir esta mensagem" aria-label="Ouvir esta mensagem">
+                <button type="button" className="btn-ouvir-msg" onClick={() => falar(m.content)} title={t('ouvir_mensagem')} aria-label={t('ouvir_mensagem')}>
                   <Volume2 size={12} />
                 </button>
               )}
@@ -470,14 +541,14 @@ export default function JarvisHome() {
 
         {acaoPendente && (
           <div className="confirmacao-card">
-            <p className="conf-titulo"><Zap size={13} /> Confirmar ação</p>
+            <p className="conf-titulo"><Zap size={13} /> {t('confirmar_acao_titulo')}</p>
             <p className="conf-desc">{acaoPendente.descricao}</p>
             <div className="conf-acoes">
               <button type="button" className="conf-sim" onClick={confirmarAcao} disabled={confirmando}>
-                <Check size={14} /> {confirmando ? 'Executando...' : 'Confirmar'}
+                <Check size={14} /> {confirmando ? t('executando') : t('confirmar')}
               </button>
               <button type="button" className="conf-nao" onClick={cancelarAcao} disabled={confirmando}>
-                <X size={14} /> Cancelar
+                <X size={14} /> {t('cancelar')}
               </button>
             </div>
           </div>
@@ -493,8 +564,8 @@ export default function JarvisHome() {
             className="chat-mic"
             data-ativo={escutando}
             onClick={() => { if (!escutando && vozAutomatica) desbloquear(); (escutando ? pararEscuta : iniciarEscuta)() }}
-            title={escutando ? 'Parar' : 'Falar'}
-            aria-label={escutando ? 'Parar captura por voz' : 'Falar com o assistente'}
+            title={escutando ? t('mic_parar') : t('mic_falar')}
+            aria-label={escutando ? t('parar_captura') : t('falar_assistente')}
           >
             {escutando ? <Square size={16} /> : <Mic size={16} />}
           </button>
@@ -502,13 +573,13 @@ export default function JarvisHome() {
         <input
           className="chat-input"
           type="text"
-          placeholder={escutando ? 'Ouvindo...' : 'Fale com o Jarvis...'}
+          placeholder={escutando ? t('ouvindo') : t('fale_com_jarvis')}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && enviar()}
           disabled={carregando || escutando}
         />
-        <button type="button" className="chat-enviar" onClick={() => enviar()} disabled={!input.trim() || carregando} aria-label="Enviar">
+        <button type="button" className="chat-enviar" onClick={() => enviar()} disabled={!input.trim() || carregando} aria-label={t('enviar_aria')}>
           <ArrowUp size={18} />
         </button>
       </div>

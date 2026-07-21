@@ -4,6 +4,8 @@ import { Wallet, CreditCard } from 'lucide-react'
 import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
+import { useIdioma } from '../hooks/useIdioma'
+import { useTexto } from '../lib/i18n'
 import Header from '../components/Header'
 import TabBar from '../components/jarvis/TabBar'
 
@@ -15,14 +17,19 @@ function mesAtual() {
   const m = new Date().toISOString().slice(0, 7)
   return m < MES_INICIO ? MES_INICIO : m
 }
+// Formato de moeda fica em pt-BR (R$ 1.234,56) independente do idioma
+// da UI — é a notação real do real, não uma questão de tradução.
 function fmt(v) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0) }
-function formatarMes(m) { return new Date(m + '-15').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) }
+function formatarMes(m, localeData) { return new Date(m + '-15').toLocaleDateString(localeData, { month: 'long', year: 'numeric' }) }
 
 const VAZIO_LANC = { descricao: '', valor: '', categoria_id: '', conta: 'corrente', tipo: 'gasto', data: hoje() }
 
 export default function Financeiro() {
   const { sessao, sair } = useAuth()
   const toast = useToast()
+  const { idioma } = useIdioma()
+  const t = useTexto()
+  const localeData = idioma === 'en' ? 'en-US' : 'pt-BR'
 
   const [lancamentos, setLancamentos] = useState([])
   const [categorias, setCategorias] = useState([])
@@ -111,80 +118,84 @@ export default function Financeiro() {
       <Header espaco={sessao.espaco} onSair={sair} />
 
       <div className="mes-selector">
-        <button type="button" onClick={() => mudarMes(-1)} disabled={mesSelecionado <= MES_INICIO} aria-label="Mês anterior">‹</button>
-        <span>{formatarMes(mesSelecionado)}</span>
-        <button type="button" onClick={() => mudarMes(1)} aria-label="Próximo mês">›</button>
+        <button type="button" onClick={() => mudarMes(-1)} disabled={mesSelecionado <= MES_INICIO} aria-label={t('mes_anterior')}>‹</button>
+        <span>{formatarMes(mesSelecionado, localeData)}</span>
+        <button type="button" onClick={() => mudarMes(1)} aria-label={t('proximo_mes')}>›</button>
       </div>
 
       {erro && <p role="alert" className="campo-erro">{erro}</p>}
 
       {carregando ? (
-        <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
+        <p className="text-body" style={{ color: 'var(--text-dim)' }}>{t('carregando')}</p>
       ) : (
         <>
           <div className="campo-grade-2">
             <div className="jarvis-kpi" style={{ borderBottom: 'none', padding: 'var(--space-sm) 0' }}>
-              <span className="text-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Wallet size={12} /> Conta corrente</span>
+              <span className="text-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Wallet size={12} /> {t('conta_corrente')}</span>
               <span className="jarvis-kpi-valor" style={{ fontSize: 24 }} data-zero={saldoCorrente < 0}>{fmt(saldoCorrente)}</span>
             </div>
             <div className="jarvis-kpi" style={{ borderBottom: 'none', padding: 'var(--space-sm) 0' }}>
-              <span className="text-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><CreditCard size={12} /> Fatura do cartão</span>
+              <span className="text-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><CreditCard size={12} /> {t('fatura_cartao')}</span>
               <span className="jarvis-kpi-valor" style={{ fontSize: 24 }}>{fmt(faturaCartao)}</span>
             </div>
           </div>
 
           <ExtratoConta
-            titulo="Extrato — Conta corrente"
+            titulo={t('extrato_corrente')}
             Icone={Wallet}
             itens={lancCorrente}
             categoriaDe={categoriaDe}
+            localeData={localeData}
+            textoVazio={t('nenhum_lancamento')}
           />
 
           <ExtratoConta
-            titulo="Extrato — Cartão de crédito"
+            titulo={t('extrato_cartao')}
             Icone={CreditCard}
             itens={lancCartao}
             categoriaDe={categoriaDe}
+            localeData={localeData}
+            textoVazio={t('nenhum_lancamento')}
           />
 
           <section className="detalhe-secao detalhe-acoes">
-            <h2 className="section-label">Lançamento rápido</h2>
+            <h2 className="section-label">{t('lancamento_rapido')}</h2>
             <div className="campo-grade-2">
               <label className="campo">
-                <span className="text-label">Descrição</span>
+                <span className="text-label">{t('descricao_campo')}</span>
                 <input value={novoLanc.descricao} onChange={(e) => setNovoLanc((p) => ({ ...p, descricao: e.target.value }))} />
               </label>
               <label className="campo">
-                <span className="text-label">Valor (R$)</span>
+                <span className="text-label">{t('valor_campo')}</span>
                 <input type="number" value={novoLanc.valor} onChange={(e) => setNovoLanc((p) => ({ ...p, valor: e.target.value }))} />
               </label>
             </div>
             <div className="campo-grade-2">
               <label className="campo">
-                <span className="text-label">Conta</span>
+                <span className="text-label">{t('conta_select')}</span>
                 <select value={novoLanc.conta} onChange={(e) => setNovoLanc((p) => ({ ...p, conta: e.target.value }))}>
-                  <option value="corrente">Conta corrente</option>
-                  <option value="cartao">Cartão de crédito</option>
+                  <option value="corrente">{t('conta_corrente')}</option>
+                  <option value="cartao">{t('cartao_credito')}</option>
                 </select>
               </label>
               <label className="campo">
-                <span className="text-label">Tipo</span>
+                <span className="text-label">{t('tipo_campo')}</span>
                 <select value={novoLanc.tipo} onChange={(e) => setNovoLanc((p) => ({ ...p, tipo: e.target.value }))}>
-                  <option value="gasto">Gasto</option>
-                  <option value="receita">Receita</option>
+                  <option value="gasto">{t('gasto')}</option>
+                  <option value="receita">{t('receita')}</option>
                 </select>
               </label>
             </div>
             <label className="campo">
-              <span className="text-label">Categoria (opcional)</span>
+              <span className="text-label">{t('categoria_opcional')}</span>
               <select value={novoLanc.categoria_id} onChange={(e) => setNovoLanc((p) => ({ ...p, categoria_id: e.target.value }))}>
-                <option value="">Sem categoria</option>
+                <option value="">{t('sem_categoria')}</option>
                 {categorias.map((c) => <option key={c.id} value={c.id}>{c.icone} {c.nome}</option>)}
               </select>
             </label>
             <div className="modal-rodape" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
               <button type="button" className="btn-primario" onClick={adicionarLancamento} disabled={!novoLanc.descricao.trim() || !novoLanc.valor || enviando}>
-                {enviando ? 'Adicionando...' : 'Adicionar'}
+                {enviando ? t('adicionando') : t('adicionar')}
               </button>
             </div>
           </section>
@@ -196,12 +207,12 @@ export default function Financeiro() {
   )
 }
 
-function ExtratoConta({ titulo, Icone, itens, categoriaDe }) {
+function ExtratoConta({ titulo, Icone, itens, categoriaDe, localeData, textoVazio }) {
   return (
     <section className="detalhe-secao">
       <h2 className="section-label">{titulo}</h2>
       {itens.length === 0 ? (
-        <p className="text-micro">Nenhum lançamento neste mês.</p>
+        <p className="text-micro">{textoVazio}</p>
       ) : (
         <div className="lista">
           {itens.map((l) => {
@@ -211,7 +222,7 @@ function ExtratoConta({ titulo, Icone, itens, categoriaDe }) {
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                   <Icone size={12} color="var(--text-dim)" style={{ flexShrink: 0 }} />
                   <span className="text-micro" style={{ marginRight: 4, flexShrink: 0 }}>
-                    {new Date(l.data + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                    {new Date(l.data + 'T12:00').toLocaleDateString(localeData, { day: '2-digit', month: '2-digit' })}
                   </span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.descricao}</span>
                   {cat && (
