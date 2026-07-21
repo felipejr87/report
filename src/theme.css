@@ -24,6 +24,13 @@
   --entregue:    #1BAF7A;
   --atencao:     #D96A5B;
   --brand:       #EDA100;
+
+  /* Identidade J.A.R.V.I.S. — hologramas. Ciano mais suave em fundo
+     claro (o tom neon vibra demais sobre --surface branco); azul
+     profundo funciona igual nos dois temas (é sempre um fundo, nunca
+     texto sobre --surface). */
+  --jarvis-ciano:        #67C7EB;
+  --jarvis-azul-profundo: #0B1B3A;
 }
 
 :root[data-tema="dark"] {
@@ -44,6 +51,11 @@
   --entregue:    #199E70;
   --atencao:     #D96A5B;
   --brand:       #C98500;
+
+  /* Sobre --surface quase preto, o ciano neon puro lê bem — sem
+     precisar suavizar como no claro. */
+  --jarvis-ciano:        #00D9FF;
+  --jarvis-azul-profundo: #0B1B3A;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -63,6 +75,9 @@
     --entregue:    #199E70;
     --atencao:     #D96A5B;
     --brand:       #C98500;
+
+    --jarvis-ciano:        #00D9FF;
+    --jarvis-azul-profundo: #0B1B3A;
   }
 }
 
@@ -76,6 +91,8 @@
   --space-xl: 40px;
 
   --ease: 440ms cubic-bezier(.4, 0, .2, 1);
+
+  --jarvis-branco-neon: #FFFFFF;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -351,6 +368,13 @@ a.link-acao { text-decoration-line: underline; }
   font-size: 17px;
 }
 .app-header .logo .brand-mark { color: var(--brand); }
+
+/* Espaço Jarvis — wordmark ganha o ciano holográfico em vez do
+   âmbar padrão do Report!, com um brilho sutil (glow), não decoração. */
+.app-header[data-jarvis="true"] .logo .brand-mark {
+  color: var(--jarvis-ciano);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--jarvis-ciano) 55%, transparent);
+}
 
 @media (max-width: 479px) {
   .esconder-mobile { display: none; }
@@ -753,20 +777,8 @@ a.link-acao { text-decoration-line: underline; }
 }
 
 /* =============================================
-   Jarvis — chip + navegação (só espaços jarvis_enabled)
+   Jarvis — tab bar (só espaços jarvis_enabled)
    ============================================= */
-
-.chip-jarvis {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--botao-primario-texto);
-  background: var(--brand);
-  padding: 2px var(--space-sm);
-  border-radius: 999px;
-  white-space: nowrap;
-}
 
 .tab-bar {
   position: fixed;
@@ -794,7 +806,7 @@ a.link-acao { text-decoration-line: underline; }
   transition: color var(--ease);
 }
 .tab-item:hover { color: var(--text-mid); }
-.tab-item.ativo { color: var(--brand); }
+.tab-item.ativo { color: var(--jarvis-ciano); }
 
 .tab-icone { flex-shrink: 0; }
 
@@ -843,35 +855,6 @@ a.link-acao { text-decoration-line: underline; }
   padding: 6px 0;
 }
 .objetivo-linha[data-status="concluido"] { color: var(--text-dim); text-decoration: line-through; }
-
-.barra-fundo {
-  position: relative;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--line);
-  overflow: hidden;
-}
-.barra-preenchimento {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 999px;
-  background: var(--entregue);
-  transition: width var(--ease);
-}
-.barra-preenchimento[data-alerta="atencao"] { background: var(--downstream); }
-.barra-preenchimento[data-alerta="estourado"] { background: var(--atencao); }
-
-.linha-categoria {
-  display: grid;
-  grid-template-columns: 20px 100px 1fr auto;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: 6px 0;
-  font-size: 13px;
-}
-@media (max-width: 480px) {
-  .linha-categoria { grid-template-columns: 20px 80px 1fr auto; font-size: 12px; }
-}
 
 .mes-selector {
   display: flex;
@@ -1042,8 +1025,8 @@ a.link-acao { text-decoration-line: underline; }
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: var(--brand);
-  color: var(--botao-primario-texto);
+  background: var(--jarvis-ciano);
+  color: var(--jarvis-azul-profundo);
   font-weight: 600;
   font-size: 12px;
   display: flex;
@@ -1168,7 +1151,7 @@ a.link-acao { text-decoration-line: underline; }
   color: var(--text-mid);
 }
 .bv-ev { display: flex; gap: 6px; }
-.bv-ev-hora { color: var(--brand); flex-shrink: 0; }
+.bv-ev-hora { color: var(--jarvis-ciano); flex-shrink: 0; }
 
 .bv-sugestao-inline {
   color: var(--atencao);
@@ -1219,13 +1202,13 @@ a.link-acao { text-decoration-line: underline; }
   color: var(--text);
 }
 .historico-item:hover { background: var(--bg); }
-.historico-item[data-ativo="true"] { border-left: 2px solid var(--brand); }
+.historico-item[data-ativo="true"] { border-left: 2px solid var(--jarvis-ciano); }
 
 .hist-titulo { font-size: 13px; flex: 1; }
 .hist-data { font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
 
 /* Resposta por voz */
-.link-acao[data-ativo="true"] { color: var(--brand); text-decoration-color: var(--brand); }
+.link-acao[data-ativo="true"] { color: var(--jarvis-ciano); text-decoration-color: var(--jarvis-ciano); }
 
 .chat-msg-corpo {
   display: flex;
@@ -1247,7 +1230,7 @@ a.link-acao { text-decoration-line: underline; }
 
 /* Card de confirmação de ação (Jarvis) */
 .confirmacao-card {
-  border: 1px solid var(--brand);
+  border: 1px solid var(--jarvis-ciano);
   border-radius: var(--space-sm);
   padding: var(--space-md);
   background: var(--surface);
@@ -1261,7 +1244,7 @@ a.link-acao { text-decoration-line: underline; }
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--brand);
+  color: var(--jarvis-ciano);
 }
 .conf-desc { font-size: 14px; color: var(--text); }
 .conf-acoes { display: flex; gap: var(--space-sm); }
@@ -1274,3 +1257,43 @@ a.link-acao { text-decoration-line: underline; }
 }
 .conf-sim { background: var(--botao-primario-bg); color: var(--botao-primario-texto); }
 .conf-nao { background: transparent; color: var(--text-dim); border: 1px solid var(--line); }
+
+/* Indicador de fala — sinaliza que o Jarvis está falando (resposta por
+   voz). Fixo, transparente ao toque (pointer-events: none) e num canto,
+   nunca cobrindo conteúdo — só some quando a fala termina. */
+.indicador-fala {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 14px);
+  right: var(--space-md);
+  width: 34px;
+  height: 34px;
+  z-index: 90;
+  pointer-events: none;
+}
+.indicador-fala-nucleo {
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--jarvis-azul-profundo);
+  color: var(--jarvis-branco-neon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--jarvis-ciano);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--jarvis-ciano) 60%, transparent);
+}
+.indicador-fala-anel {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--jarvis-ciano);
+  opacity: .7;
+  animation: fala-anel 1.6s ease-out infinite;
+}
+.indicador-fala-anel:nth-child(2) { animation-delay: .55s; }
+@keyframes fala-anel {
+  0%   { transform: scale(.7); opacity: .7; }
+  100% { transform: scale(1.9); opacity: 0; }
+}

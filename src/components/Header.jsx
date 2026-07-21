@@ -7,13 +7,12 @@ export default function Header({ espaco, onSair }) {
 
   return (
     <>
-      <header className="app-header">
+      <header className="app-header" data-jarvis={isJarvis}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', minWidth: 0 }}>
           <span className="logo esconder-mobile">
             Jarvis<span className="brand-mark">!</span>
           </span>
-          <span className="chip-codigo">{espaco.codigo}</span>
-          {isJarvis && <span className="chip-jarvis">Jarvis</span>}
+          {!isJarvis && <span className="chip-codigo">{espaco.codigo}</span>}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>

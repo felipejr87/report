@@ -5,11 +5,16 @@ import { supabaseEspaco } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import Header from '../components/Header'
-import { isEnabled } from '../lib/features'
 import TabBar from '../components/jarvis/TabBar'
 
+// Conta começou a ser usada em jul/26 — extrato não mostra nada antes disso.
+const MES_INICIO = '2026-07'
+
 function hoje() { return new Date().toISOString().split('T')[0] }
-function mesAtual() { return new Date().toISOString().slice(0, 7) }
+function mesAtual() {
+  const m = new Date().toISOString().slice(0, 7)
+  return m < MES_INICIO ? MES_INICIO : m
+}
 function fmt(v) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0) }
 function formatarMes(m) { return new Date(m + '-15').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) }
 
@@ -21,7 +26,6 @@ export default function Financeiro() {
 
   const [lancamentos, setLancamentos] = useState([])
   const [categorias, setCategorias] = useState([])
-  const [dividas, setDividas] = useState([])
   const [mesSelecionado, setMesSelecionado] = useState(mesAtual())
   const [novoLanc, setNovoLanc] = useState(VAZIO_LANC)
   const [carregando, setCarregando] = useState(true)
@@ -40,18 +44,16 @@ export default function Financeiro() {
     fimMesDate.setMonth(fimMesDate.getMonth() + 1)
     const fimMes = fimMesDate.toISOString().split('T')[0]
 
-    const [{ data: lncs, error: eL }, { data: cats, error: eC }, { data: divs, error: eD }] = await Promise.all([
+    const [{ data: lncs, error: eL }, { data: cats, error: eC }] = await Promise.all([
       cliente.from('lancamentos').select('*').gte('data', inicioMes).lt('data', fimMes).order('data', { ascending: false }),
       cliente.from('categorias_fin').select('*').order('id'),
-      cliente.from('dividas').select('*').eq('ativa', true),
     ])
 
-    if (eL || eC || eD) {
-      setErro((eL || eC || eD).message)
+    if (eL || eC) {
+      setErro((eL || eC).message)
     } else {
       setLancamentos(lncs || [])
       setCategorias(cats || [])
-      setDividas(divs || [])
     }
     setCarregando(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,6 +62,10 @@ export default function Financeiro() {
   useEffect(() => { carregar() }, [carregar])
 
   if (!sessao) return <Navigate to="/" replace />
+
+  function categoriaDe(id) {
+    return categorias.find((c) => c.id === id) || null
+  }
 
   async function adicionarLancamento() {
     if (!novoLanc.descricao.trim() || !novoLanc.valor) return
@@ -87,7 +93,9 @@ export default function Financeiro() {
   function mudarMes(delta) {
     const d = new Date(mesSelecionado + '-15')
     d.setMonth(d.getMonth() + delta)
-    setMesSelecionado(d.toISOString().slice(0, 7))
+    const novoMes = d.toISOString().slice(0, 7)
+    if (novoMes < MES_INICIO) return
+    setMesSelecionado(novoMes)
   }
 
   const lancCorrente = lancamentos.filter((l) => l.conta !== 'cartao')
@@ -96,13 +104,6 @@ export default function Financeiro() {
   const saldoCorrente = lancCorrente.reduce((s, l) => s + l.valor, 0)
   const faturaCartao = lancCartao.filter((l) => l.valor < 0).reduce((s, l) => s + Math.abs(l.valor), 0)
 
-  const gastoPorCat = {}
-  let semCategoria = 0
-  lancamentos.filter((l) => l.valor < 0).forEach((l) => {
-    if (l.categoria_id) gastoPorCat[l.categoria_id] = (gastoPorCat[l.categoria_id] || 0) + Math.abs(l.valor)
-    else semCategoria += Math.abs(l.valor)
-  })
-
   const isJarvis = sessao.espaco.jarvis_enabled === true
 
   return (
@@ -110,7 +111,7 @@ export default function Financeiro() {
       <Header espaco={sessao.espaco} onSair={sair} />
 
       <div className="mes-selector">
-        <button type="button" onClick={() => mudarMes(-1)} aria-label="Mês anterior">‹</button>
+        <button type="button" onClick={() => mudarMes(-1)} disabled={mesSelecionado <= MES_INICIO} aria-label="Mês anterior">‹</button>
         <span>{formatarMes(mesSelecionado)}</span>
         <button type="button" onClick={() => mudarMes(1)} aria-label="Próximo mês">›</button>
       </div>
@@ -132,73 +133,19 @@ export default function Financeiro() {
             </div>
           </div>
 
-          <section className="detalhe-secao">
-            <h2 className="section-label">Resumo por categoria</h2>
-            <p className="text-micro" style={{ marginBottom: 'var(--space-sm)' }}>
-              Classificação é opcional na hora de lançar — isto aqui é só um resumo do que já foi categorizado.
-            </p>
-            {categorias.filter((c) => c.teto_mensal).map((cat) => {
-              const gasto = gastoPorCat[cat.id] || 0
-              const pct = cat.teto_mensal ? Math.min(100, (gasto / cat.teto_mensal) * 100) : 0
-              const alerta = pct >= 100 ? 'estourado' : pct >= 80 ? 'atencao' : 'ok'
-              return (
-                <div key={cat.id} className="linha-categoria">
-                  <span aria-hidden="true">{cat.icone}</span>
-                  <span>{cat.nome}</span>
-                  <div className="barra-fundo">
-                    <div className="barra-preenchimento" data-alerta={alerta} style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-micro">{fmt(gasto)} / {fmt(cat.teto_mensal)}</span>
-                </div>
-              )
-            })}
-            {semCategoria > 0 && (
-              <div className="linha-categoria">
-                <span aria-hidden="true">—</span>
-                <span style={{ color: 'var(--text-dim)' }}>Sem categoria</span>
-                <div />
-                <span className="text-micro">{fmt(semCategoria)}</span>
-              </div>
-            )}
-          </section>
+          <ExtratoConta
+            titulo="Extrato — Conta corrente"
+            Icone={Wallet}
+            itens={lancCorrente}
+            categoriaDe={categoriaDe}
+          />
 
-          {isEnabled('FIN_DIVIDAS') && dividas.length > 0 && (
-            <section className="detalhe-secao">
-              <h2 className="section-label">Dívidas</h2>
-              {dividas.map((d) => (
-                <div key={d.id} className="detalhe-meta-grade" style={{ flexDirection: 'row', gap: 'var(--space-md)' }}>
-                  <span>{d.nome}</span>
-                  <span>{fmt(d.saldo_atual)}</span>
-                  {d.parcela != null && <span className="text-micro">parcela {fmt(d.parcela)}</span>}
-                  {d.meta_quitacao && <span className="text-micro">quitação {formatarMes(d.meta_quitacao.slice(0, 7))}</span>}
-                </div>
-              ))}
-            </section>
-          )}
-
-          <section className="detalhe-secao">
-            <h2 className="section-label">Lançamentos</h2>
-            {lancamentos.length === 0 ? (
-              <p className="text-micro">Nenhum lançamento neste mês.</p>
-            ) : (
-              <div className="lista">
-                {lancamentos.map((l) => (
-                  <div key={l.id} className="item-atividade" style={{ cursor: 'default', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {l.conta === 'cartao' ? <CreditCard size={12} color="var(--text-dim)" /> : <Wallet size={12} color="var(--text-dim)" />}
-                      <span className="text-micro" style={{ marginRight: 4 }}>
-                        {new Date(l.data + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                      </span>
-                      {l.descricao}
-                    </span>
-                    <span style={{ color: l.valor > 0 ? 'var(--entregue)' : 'var(--text)' }}>
-                      {l.valor > 0 ? '+' : ''}{fmt(l.valor)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+          <ExtratoConta
+            titulo="Extrato — Cartão de crédito"
+            Icone={CreditCard}
+            itens={lancCartao}
+            categoriaDe={categoriaDe}
+          />
 
           <section className="detalhe-secao detalhe-acoes">
             <h2 className="section-label">Lançamento rápido</h2>
@@ -246,5 +193,41 @@ export default function Financeiro() {
 
       {isJarvis && <TabBar />}
     </div>
+  )
+}
+
+function ExtratoConta({ titulo, Icone, itens, categoriaDe }) {
+  return (
+    <section className="detalhe-secao">
+      <h2 className="section-label">{titulo}</h2>
+      {itens.length === 0 ? (
+        <p className="text-micro">Nenhum lançamento neste mês.</p>
+      ) : (
+        <div className="lista">
+          {itens.map((l) => {
+            const cat = categoriaDe(l.categoria_id)
+            return (
+              <div key={l.id} className="item-atividade" style={{ cursor: 'default', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  <Icone size={12} color="var(--text-dim)" style={{ flexShrink: 0 }} />
+                  <span className="text-micro" style={{ marginRight: 4, flexShrink: 0 }}>
+                    {new Date(l.data + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                  </span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.descricao}</span>
+                  {cat && (
+                    <span className="text-micro" style={{ flexShrink: 0 }} title={cat.nome}>
+                      {cat.icone}
+                    </span>
+                  )}
+                </span>
+                <span style={{ color: l.valor > 0 ? 'var(--entregue)' : 'var(--text)', flexShrink: 0, marginLeft: 'var(--space-sm)' }}>
+                  {l.valor > 0 ? '+' : ''}{fmt(l.valor)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
   )
 }

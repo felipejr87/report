@@ -7,6 +7,7 @@ import { supabaseEspaco, urlFuncao } from '../lib/supabase'
 import { useVoz, useFala } from '../hooks/useVoz'
 import Header from '../components/Header'
 import TabBar from '../components/jarvis/TabBar'
+import IndicadorFala from '../components/jarvis/IndicadorFala'
 
 const CHAVE_VOZ_AUTO = 'jarvis_voz_auto'
 
@@ -204,6 +205,7 @@ export default function JarvisHome() {
   return (
     <div style={{ maxWidth: 680, margin: '0 auto', padding: 'var(--space-md)', paddingBottom: 76, display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', height: '100vh', position: 'relative' }}>
       <Header espaco={sessao.espaco} onSair={sair} />
+      <IndicadorFala ativo={falando} />
 
       {briefing && (
         <div className="jarvis-briefing">

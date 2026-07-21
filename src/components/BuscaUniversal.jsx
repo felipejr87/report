@@ -143,9 +143,6 @@ export default function BuscaUniversal() {
                     {resultados.dividas.map((item) => (
                       <ItemResultado key={item.id} onClick={() => irPara(item)}>
                         <span className="res-nome">{item.nome}</span>
-                        <span className="res-meta">
-                          {fmt(item.saldo_atual)}{item.parcela ? ` · parcela ${fmt(item.parcela)}` : ''}
-                        </span>
                       </ItemResultado>
                     ))}
                   </GrupoResultado>

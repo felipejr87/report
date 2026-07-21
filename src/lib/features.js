@@ -17,7 +17,6 @@ export const FEATURES = {
 
   // FINANCEIRO
   FIN_LANCAMENTOS: true, // módulo de lançamentos
-  FIN_DIVIDAS: true, // gestão de dívidas
   FIN_GRAFICO_MENSAL: false, // gráfico temporal (futuro)
   FIN_ORCAMENTO_ANUAL: false, // visão anual (futuro)
 
