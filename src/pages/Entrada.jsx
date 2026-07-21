@@ -39,7 +39,7 @@ export default function Entrada() {
       const { token, espaco } = await chamarFuncao('entrar-espaco', { codigo, senha })
       entrar(token, espaco)
       setUsuario(seuNome)
-      navigate('/espaco')
+      navigate(espaco.jarvis_enabled ? '/jarvis' : '/projetos')
     } catch (err) {
       setErro(err.message)
     } finally {
@@ -62,7 +62,7 @@ export default function Entrada() {
       const { token, espaco: espacoLogin } = await chamarFuncao('entrar-espaco', { codigo, senha })
       entrar(token, espacoLogin)
       setUsuario(seuNome)
-      navigate('/espaco')
+      navigate(espacoLogin.jarvis_enabled ? '/jarvis' : '/projetos')
     } catch (err) {
       setErro(err.message)
     } finally {

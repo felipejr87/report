@@ -1,6 +1,5 @@
 import ThemeToggle from './ThemeToggle'
 import UsuarioBadge from './UsuarioBadge'
-import JarvisNav from './JarvisNav'
 import BuscaUniversal from './BuscaUniversal'
 
 export default function Header({ espaco, onSair }) {
@@ -26,7 +25,6 @@ export default function Header({ espaco, onSair }) {
       <div style={{ paddingTop: 'var(--space-sm)' }}>
         <BuscaUniversal />
       </div>
-      {isJarvis && <JarvisNav />}
     </>
   )
 }

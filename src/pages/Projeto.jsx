@@ -95,7 +95,7 @@ export default function Projeto() {
     const { error } = await cliente.from('projetos').delete().eq('id', id)
     if (error) throw error
     toast?.sucesso('Projeto excluído.')
-    navigate('/espaco')
+    navigate('/projetos')
   }
 
   async function concluirPasso(movimento, atividadeId) {
@@ -117,11 +117,11 @@ export default function Projeto() {
   return (
     <div className="detalhe-pagina" style={{ maxWidth: 760 }}>
       <header className="detalhe-header">
-        <Link to="/espaco" className="link-voltar">
+        <Link to="/projetos" className="link-voltar">
           <ArrowLeft size={16} />
           Projetos
         </Link>
-        <Link to={`/espaco/timeline/${id}`} className="link-acao">Ver timeline</Link>
+        <Link to={`/projetos/timeline/${id}`} className="link-acao">Ver timeline</Link>
       </header>
 
       <div className="detalhe-titulo-area">
@@ -172,7 +172,7 @@ export default function Projeto() {
               key={a.id}
               atividade={{ ...a, proximoPasso: proximosPassos[a.id] }}
               onConcluirPasso={concluirPasso}
-              onClick={() => navigate(`/espaco/atividade/${a.id}`)}
+              onClick={() => navigate(`/projetos/atividade/${a.id}`)}
             />
           ))}
         </div>

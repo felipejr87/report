@@ -177,7 +177,7 @@ export default function Atividade() {
     const { error } = await cliente.from('atividades').delete().eq('id', id)
     if (error) throw error
     toast?.sucesso('Atividade excluída.')
-    navigate(atividade.projeto_id ? `/espaco/projeto/${atividade.projeto_id}` : '/espaco')
+    navigate(atividade.projeto_id ? `/projetos/projeto/${atividade.projeto_id}` : '/projetos')
   }
 
   async function handleCopiarReport() {
@@ -195,7 +195,7 @@ export default function Atividade() {
   return (
     <div className="detalhe-pagina">
       <header className="detalhe-header">
-        <Link to={atividade.projeto_id ? `/espaco/projeto/${atividade.projeto_id}` : '/espaco'} className="link-voltar">
+        <Link to={atividade.projeto_id ? `/projetos/projeto/${atividade.projeto_id}` : '/projetos'} className="link-voltar">
           <ArrowLeft size={16} />
           Voltar
         </Link>
@@ -207,7 +207,7 @@ export default function Atividade() {
 
       <div className="detalhe-titulo-area">
         <ChipFase fase={atividade.fase} />
-        {projeto && <Link to={`/espaco/projeto/${projeto.id}`} className="text-micro">{projeto.nome}</Link>}
+        {projeto && <Link to={`/projetos/projeto/${projeto.id}`} className="text-micro">{projeto.nome}</Link>}
         <h1 className="text-hero">{atividade.nome}</h1>
         <button type="button" className="link-acao" onClick={() => setMostrarEditar(true)}>Editar</button>
       </div>
@@ -228,7 +228,7 @@ export default function Atividade() {
           {predecessora && (
             <span>
               <span className="meta-label">Depende de</span>
-              <Link to={`/espaco/atividade/${predecessora.id}`} className="link-acao">{predecessora.nome}</Link>
+              <Link to={`/projetos/atividade/${predecessora.id}`} className="link-acao">{predecessora.nome}</Link>
             </span>
           )}
           {sucessoras.length > 0 && (
@@ -237,7 +237,7 @@ export default function Atividade() {
               {sucessoras.map((s, i) => (
                 <span key={s.id}>
                   {i > 0 && ', '}
-                  <Link to={`/espaco/atividade/${s.id}`} className="link-acao">{s.nome}</Link>
+                  <Link to={`/projetos/atividade/${s.id}`} className="link-acao">{s.nome}</Link>
                 </span>
               ))}
             </span>

@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Navigate } from 'react-router-dom'
 import { Wallet, CreditCard } from 'lucide-react'
-import { supabaseEspaco } from '../../lib/supabase'
-import { useAuth } from '../../hooks/useAuth'
-import { useToast } from '../../hooks/useToast'
-import Header from '../../components/Header'
-import { isEnabled } from '../../lib/features'
+import { supabaseEspaco } from '../lib/supabase'
+import { useAuth } from '../hooks/useAuth'
+import { useToast } from '../hooks/useToast'
+import Header from '../components/Header'
+import { isEnabled } from '../lib/features'
+import TabBar from '../components/jarvis/TabBar'
 
 function hoje() { return new Date().toISOString().split('T')[0] }
 function mesAtual() { return new Date().toISOString().slice(0, 7) }
@@ -102,8 +103,10 @@ export default function Financeiro() {
     else semCategoria += Math.abs(l.valor)
   })
 
+  const isJarvis = sessao.espaco.jarvis_enabled === true
+
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', paddingBottom: isJarvis ? 76 : 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
       <Header espaco={sessao.espaco} onSair={sair} />
 
       <div className="mes-selector">
@@ -240,6 +243,8 @@ export default function Financeiro() {
           </section>
         </>
       )}
+
+      {isJarvis && <TabBar />}
     </div>
   )
 }

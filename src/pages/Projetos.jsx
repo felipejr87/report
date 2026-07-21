@@ -8,7 +8,7 @@ import { ordenarProjetosPorEntrega, precisaDeTracao } from '../lib/projeto'
 import Header from '../components/Header'
 import FormProjeto from '../components/FormProjeto'
 import Modal from '../components/Modal'
-import BoasVindas from '../components/jarvis/BoasVindas'
+import TabBar from '../components/jarvis/TabBar'
 
 const MARCAS_DIACRITICAS = new RegExp(
   '[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036f) + ']', 'g'
@@ -21,7 +21,7 @@ function normalizar(texto) {
     .toLowerCase()
 }
 
-export default function Espaco() {
+export default function Projetos() {
   const { sessao, sair } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
@@ -70,7 +70,7 @@ export default function Espaco() {
     toast?.sucesso('Projeto criado.')
     setMostrarNovo(false)
     await carregar()
-    navigate(`/espaco/projeto/${data.id}`)
+    navigate(`/projetos/projeto/${data.id}`)
   }
 
   const termo = normalizar(busca)
@@ -89,10 +89,8 @@ export default function Espaco() {
   const isJarvis = sessao.espaco.jarvis_enabled === true
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', paddingBottom: isJarvis ? 76 : 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
       <Header espaco={sessao.espaco} onSair={sair} />
-
-      {isJarvis && <BoasVindas />}
 
       <div className="layout-espaco">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -129,8 +127,8 @@ export default function Espaco() {
                 <h2 className="section-label">Atividades</h2>
                 <div className="lista">
                   {atividadesEncontradas.map((a) => (
-                    <div key={a.id} className="item-atividade" onClick={() => navigate(`/espaco/atividade/${a.id}`)} role="button" tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/espaco/atividade/${a.id}`) } }}
+                    <div key={a.id} className="item-atividade" onClick={() => navigate(`/projetos/atividade/${a.id}`)} role="button" tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/projetos/atividade/${a.id}`) } }}
                       aria-label={`Abrir atividade ${a.nome}`}
                     >
                       <div className="item-atividade-titulo">{a.nome}</div>
@@ -161,10 +159,10 @@ export default function Espaco() {
                     <div
                       key={p.id}
                       className="item-atividade"
-                      onClick={() => navigate(`/espaco/projeto/${p.id}`)}
+                      onClick={() => navigate(`/projetos/projeto/${p.id}`)}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/espaco/projeto/${p.id}`) } }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/projetos/projeto/${p.id}`) } }}
                       aria-label={`Abrir projeto ${p.nome}`}
                     >
                       <div className="item-atividade-titulo" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -203,6 +201,8 @@ export default function Espaco() {
           <FormProjeto onSalvar={criarProjeto} onCancelar={() => setMostrarNovo(false)} />
         </Modal>
       )}
+
+      {isJarvis && <TabBar />}
     </div>
   )
 }

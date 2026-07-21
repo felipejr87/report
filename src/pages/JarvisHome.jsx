@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
-import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check } from 'lucide-react'
-import { useAuth } from '../../hooks/useAuth'
-import { useToast } from '../../hooks/useToast'
-import { supabaseEspaco, urlFuncao } from '../../lib/supabase'
-import { useVoz, useFala } from '../../hooks/useVoz'
+import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check, Umbrella } from 'lucide-react'
+import { useAuth } from '../hooks/useAuth'
+import { useToast } from '../hooks/useToast'
+import { supabaseEspaco, urlFuncao } from '../lib/supabase'
+import { useVoz, useFala } from '../hooks/useVoz'
+import Header from '../components/Header'
+import TabBar from '../components/jarvis/TabBar'
 
 const CHAVE_VOZ_AUTO = 'jarvis_voz_auto'
-import Header from '../../components/Header'
 
 function renderMsg(texto) {
   return texto
@@ -16,7 +17,7 @@ function renderMsg(texto) {
     .replace(/\n/g, '<br>')
 }
 
-export default function Assistente() {
+export default function JarvisHome() {
   const { sessao, sair } = useAuth()
   const toast = useToast()
   const [conversas, setConversas] = useState([])
@@ -28,6 +29,7 @@ export default function Assistente() {
   const [vozAutomatica, setVozAutomatica] = useState(() => localStorage.getItem(CHAVE_VOZ_AUTO) === 'true')
   const [acaoPendente, setAcaoPendente] = useState(null)
   const [confirmando, setConfirmando] = useState(false)
+  const [briefing, setBriefing] = useState(null)
   const rodapeRef = useRef(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const msgInicialEnviada = useRef(false)
@@ -43,6 +45,18 @@ export default function Assistente() {
   }
 
   const cliente = sessao ? supabaseEspaco(sessao.token) : null
+
+  const carregarBriefing = useCallback(async () => {
+    if (!sessao) return
+    try {
+      const res = await fetch(urlFuncao('jarvis-briefing'), { headers: { Authorization: `Bearer ${sessao.token}` } })
+      const data = await res.json()
+      if (data.ok) setBriefing(data)
+    } catch (e) {
+      console.warn('[jarvis-briefing]', e)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessao?.token])
 
   const carregarConversas = useCallback(async () => {
     if (!cliente) return
@@ -68,11 +82,10 @@ export default function Assistente() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessao?.token])
 
-  useEffect(() => { carregarConversas(); novaConversa() }, [carregarConversas, novaConversa])
+  useEffect(() => { carregarBriefing(); carregarConversas(); novaConversa() }, [carregarBriefing, carregarConversas, novaConversa])
   useEffect(() => { rodapeRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens, acaoPendente])
 
-  // Suporta /jarvis/assistente?msg=... (usado pelas sugestões do Brief)
-  // — envia a mensagem automaticamente depois que a saudação carregar.
+  // Suporta /jarvis?msg=... (usado pelas sugestões da aba Vida)
   useEffect(() => {
     const msg = searchParams.get('msg')
     if (msg && mensagens.length > 0 && !msgInicialEnviada.current) {
@@ -111,9 +124,6 @@ export default function Assistente() {
       await cliente.from('conversas').update({ atualizado_em: new Date().toISOString() }).eq('id', convId)
     }
 
-    // qtdNovas: quantas mensagens no fim do array são realmente novas
-    // (confirmar/cancelar só adicionam 1 — a proposta anterior já foi
-    // persistida no turno de enviar()).
     const novas = historico.slice(-qtdNovas)
     await cliente.from('conversa_mensagens').insert(
       novas.map((m) => ({ conversa_id: convId, role: m.role, content: m.content }))
@@ -124,8 +134,6 @@ export default function Assistente() {
     const texto = (textoOverride ?? input).trim()
     if (!texto || carregando) return
 
-    // Precisa ser síncrono, antes de qualquer await — depois do fetch o
-    // iOS já não considera mais "gesto do usuário" e o speak() é ignorado.
     if (vozAutomatica) desbloquear()
 
     const historicoAtual = [...mensagens, { role: 'user', content: texto }]
@@ -172,6 +180,7 @@ export default function Assistente() {
       setAcaoPendente(null)
       if (vozAutomatica) falar(texto)
       await persistirConversa(novoHistorico, texto, 1)
+      carregarBriefing()
     } catch {
       toast?.erro('Erro de conexão ao confirmar.')
     }
@@ -190,9 +199,40 @@ export default function Assistente() {
     onErro: (e) => toast?.erro(typeof e === 'string' ? e : 'Erro na captura por voz.'),
   })
 
+  const isJarvis = sessao.espaco.jarvis_enabled === true
+
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', height: '100vh', position: 'relative' }}>
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: 'var(--space-md)', paddingBottom: 76, display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', height: '100vh', position: 'relative' }}>
       <Header espaco={sessao.espaco} onSair={sair} />
+
+      {briefing && (
+        <div className="jarvis-briefing">
+          {briefing.tempo && (
+            <div className="bv-tempo-inline">
+              <span className="tempo-num">{briefing.tempo.temp}°C</span>
+              <span className="tempo-txt">{briefing.tempo.descricao}</span>
+              {briefing.tempo.probChuva > 40 && (
+                <span className="tempo-chuva"><Umbrella size={11} /> {briefing.tempo.probChuva}%</span>
+              )}
+            </div>
+          )}
+          {briefing.eventosHoje?.length > 0 && (
+            <div className="bv-eventos-inline">
+              {briefing.eventosHoje.slice(0, 2).map((e, i) => (
+                <span key={i} className="bv-ev">
+                  <span className="bv-ev-hora">{new Date(e.inicio).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}</span>
+                  {e.titulo}
+                </span>
+              ))}
+            </div>
+          )}
+          {(briefing.urgentes?.length > 0 || briefing.paradas?.length > 0) && (
+            <div className="bv-sugestao-inline">
+              → {briefing.urgentes?.length > 0 ? `"${briefing.urgentes[0].nome}" — prazo próximo` : `"${briefing.paradas[0].nome}" parada há dias`}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button type="button" className="btn-secundario" onClick={() => setMostrarHistorico((v) => !v)}>
@@ -301,7 +341,7 @@ export default function Assistente() {
         <input
           className="chat-input"
           type="text"
-          placeholder={escutando ? 'Ouvindo...' : 'Pergunte ou peça uma ação...'}
+          placeholder={escutando ? 'Ouvindo...' : 'Fale com o Jarvis...'}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && enviar()}
@@ -311,6 +351,8 @@ export default function Assistente() {
           <ArrowUp size={18} />
         </button>
       </div>
+
+      {isJarvis && <TabBar />}
     </div>
   )
 }

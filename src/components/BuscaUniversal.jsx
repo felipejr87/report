@@ -57,12 +57,12 @@ export default function BuscaUniversal() {
 
   function irPara(item) {
     fechar()
-    if (item.tipo === 'projeto') navigate(`/espaco/projeto/${item.id}`)
-    if (item.tipo === 'atividade') navigate(`/espaco/atividade/${item.id}`)
-    if (item.tipo === 'objetivo') navigate('/jarvis/pilares')
-    if (item.tipo === 'divida') navigate('/jarvis/financeiro')
-    if (item.tipo === 'lancamento') navigate('/jarvis/financeiro')
-    if (item.tipo === 'movimento') navigate(`/espaco/atividade/${item.atividade_id}`)
+    if (item.tipo === 'projeto') navigate(`/projetos/projeto/${item.id}`)
+    if (item.tipo === 'atividade') navigate(`/projetos/atividade/${item.id}`)
+    if (item.tipo === 'objetivo') navigate('/vida')
+    if (item.tipo === 'divida') navigate('/financeiro')
+    if (item.tipo === 'lancamento') navigate('/financeiro')
+    if (item.tipo === 'movimento') navigate(`/projetos/atividade/${item.atividade_id}`)
   }
 
   if (!sessao) return null

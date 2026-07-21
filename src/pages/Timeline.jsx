@@ -52,7 +52,7 @@ export default function Timeline() {
   return (
     <div className="detalhe-pagina" style={{ maxWidth: 860 }}>
       <header className="detalhe-header">
-        <Link to={`/espaco/projeto/${id}`} className="link-voltar">
+        <Link to={`/projetos/projeto/${id}`} className="link-voltar">
           <ArrowLeft size={16} />
           Voltar
         </Link>
@@ -97,7 +97,7 @@ export default function Timeline() {
                 {itens.map((item) => (
                   <div key={item.atividade.id} className="gantt-linha">
                     <div className="gantt-label">
-                      <Link to={`/espaco/atividade/${item.atividade.id}`} className="link-acao" style={{ fontWeight: 500 }}>
+                      <Link to={`/projetos/atividade/${item.atividade.id}`} className="link-acao" style={{ fontWeight: 500 }}>
                         {item.atividade.nome}
                       </Link>
                       {item.atividade.predecessora_id && (
@@ -128,7 +128,7 @@ export default function Timeline() {
                 {semData.map((a) => (
                   <div key={a.id} className="timeline-item">
                     <span className="fase-ponto" data-fase={a.fase} aria-hidden="true" style={{ marginTop: 6 }} />
-                    <Link to={`/espaco/atividade/${a.id}`} className="link-acao">{a.nome}</Link>
+                    <Link to={`/projetos/atividade/${a.id}`} className="link-acao">{a.nome}</Link>
                   </div>
                 ))}
               </div>
