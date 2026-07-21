@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
-import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check, Umbrella, Bell, BellOff } from 'lucide-react'
+import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check, Umbrella, Bell, BellOff, Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { useIdioma } from '../hooks/useIdioma'
 import { useTexto } from '../lib/i18n'
 import { supabaseEspaco, urlFuncao } from '../lib/supabase'
-import { useVoz, useFala } from '../hooks/useVoz'
+import { useVoz } from '../hooks/useVoz'
+import { useJarvisVoz } from '../hooks/useJarvisVoz'
 import Header from '../components/Header'
 import TabBar from '../components/jarvis/TabBar'
 import IndicadorFala from '../components/jarvis/IndicadorFala'
@@ -209,7 +210,7 @@ export default function JarvisHome() {
   const [searchParams, setSearchParams] = useSearchParams()
   const msgInicialEnviada = useRef(false)
 
-  const { falar, pararFala, falando, suportado: falaSuportada, desbloquear } = useFala(idioma)
+  const { falar, pararFala, falando, carregandoAudio, suportado: falaSuportada, desbloquear } = useJarvisVoz(sessao.token, idioma)
 
   function toggleVozAutomatica() {
     const novo = !vozAutomatica
@@ -468,7 +469,7 @@ export default function JarvisHome() {
               title={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
               aria-label={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
             >
-              {falando ? <Volume2 size={14} /> : vozAutomatica ? <Volume1 size={14} /> : <VolumeX size={14} />}
+              {carregandoAudio ? <Loader2 size={14} className="icone-girando" /> : falando ? <Volume2 size={14} /> : vozAutomatica ? <Volume1 size={14} /> : <VolumeX size={14} />}
             </button>
           )}
           {pushSuportado && (
@@ -535,6 +536,16 @@ export default function JarvisHome() {
             <span className="chat-avatar">J</span>
             <div className="chat-bubble">
               <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+            </div>
+          </div>
+        )}
+
+        {!carregando && carregandoAudio && (
+          <div className="chat-msg assistant">
+            <span className="chat-avatar">J</span>
+            <div className="chat-bubble" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-dim)' }}>
+              <Loader2 size={13} className="icone-girando" />
+              <span className="text-micro">{t('preparando_audio')}</span>
             </div>
           </div>
         )}

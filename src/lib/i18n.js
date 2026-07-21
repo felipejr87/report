@@ -45,6 +45,7 @@ export const TEXTOS = {
     enviar_aria: 'Enviar',
     prazo_proximo: 'prazo próximo',
     parada_dias: 'parada há dias',
+    preparando_audio: 'Preparando áudio...',
 
     sua_vida: 'Sua vida',
     carregando: 'Carregando...',
@@ -121,6 +122,7 @@ export const TEXTOS = {
     enviar_aria: 'Send',
     prazo_proximo: 'due soon',
     parada_dias: 'stalled for days',
+    preparando_audio: 'Preparing audio...',
 
     sua_vida: 'Your life',
     carregando: 'Loading...',

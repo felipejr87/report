@@ -1106,6 +1106,11 @@ a.link-acao { text-decoration-line: underline; }
   40% { opacity: 1; }
 }
 
+.icone-girando { animation: girar 1s linear infinite; }
+@keyframes girar {
+  to { transform: rotate(360deg); }
+}
+
 .chat-input-area {
   display: flex;
   gap: var(--space-sm);
