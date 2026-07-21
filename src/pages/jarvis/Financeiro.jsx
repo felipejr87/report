@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Navigate } from 'react-router-dom'
+import { Wallet, CreditCard } from 'lucide-react'
 import { supabaseEspaco } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../hooks/useToast'
@@ -11,7 +12,7 @@ function mesAtual() { return new Date().toISOString().slice(0, 7) }
 function fmt(v) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0) }
 function formatarMes(m) { return new Date(m + '-15').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) }
 
-const VAZIO_LANC = { descricao: '', valor: '', categoria_id: '', tipo: 'gasto', data: hoje() }
+const VAZIO_LANC = { descricao: '', valor: '', categoria_id: '', conta: 'corrente', tipo: 'gasto', data: hoje() }
 
 export default function Financeiro() {
   const { sessao, sair } = useAuth()
@@ -67,12 +68,13 @@ export default function Financeiro() {
       const { error } = await cliente.from('lancamentos').insert({
         espaco_id: sessao.espaco.id,
         categoria_id: novoLanc.categoria_id || null,
+        conta: novoLanc.conta,
         descricao: novoLanc.descricao.trim(),
         valor,
         data: novoLanc.data,
       })
       if (error) throw error
-      setNovoLanc({ ...VAZIO_LANC, data: novoLanc.data })
+      setNovoLanc({ ...VAZIO_LANC, data: novoLanc.data, conta: novoLanc.conta })
       await carregar()
     } catch (err) {
       toast?.erro(err.message)
@@ -87,13 +89,18 @@ export default function Financeiro() {
     setMesSelecionado(d.toISOString().slice(0, 7))
   }
 
+  const lancCorrente = lancamentos.filter((l) => l.conta !== 'cartao')
+  const lancCartao = lancamentos.filter((l) => l.conta === 'cartao')
+
+  const saldoCorrente = lancCorrente.reduce((s, l) => s + l.valor, 0)
+  const faturaCartao = lancCartao.filter((l) => l.valor < 0).reduce((s, l) => s + Math.abs(l.valor), 0)
+
   const gastoPorCat = {}
+  let semCategoria = 0
   lancamentos.filter((l) => l.valor < 0).forEach((l) => {
     if (l.categoria_id) gastoPorCat[l.categoria_id] = (gastoPorCat[l.categoria_id] || 0) + Math.abs(l.valor)
+    else semCategoria += Math.abs(l.valor)
   })
-
-  const totalReceita = lancamentos.filter((l) => l.valor > 0).reduce((s, l) => s + l.valor, 0)
-  const totalGasto = lancamentos.filter((l) => l.valor < 0).reduce((s, l) => s + Math.abs(l.valor), 0)
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
@@ -111,14 +118,22 @@ export default function Financeiro() {
         <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
       ) : (
         <>
-          <div className="detalhe-meta-grade" style={{ flexDirection: 'row', gap: 'var(--space-lg)' }}>
-            <span><span className="meta-label">Receita</span> {fmt(totalReceita)}</span>
-            <span><span className="meta-label">Gastos</span> {fmt(totalGasto)}</span>
-            <span><span className="meta-label">Saldo</span> {fmt(totalReceita - totalGasto)}</span>
+          <div className="campo-grade-2">
+            <div className="jarvis-kpi" style={{ borderBottom: 'none', padding: 'var(--space-sm) 0' }}>
+              <span className="text-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Wallet size={12} /> Conta corrente</span>
+              <span className="jarvis-kpi-valor" style={{ fontSize: 24 }} data-zero={saldoCorrente < 0}>{fmt(saldoCorrente)}</span>
+            </div>
+            <div className="jarvis-kpi" style={{ borderBottom: 'none', padding: 'var(--space-sm) 0' }}>
+              <span className="text-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><CreditCard size={12} /> Fatura do cartão</span>
+              <span className="jarvis-kpi-valor" style={{ fontSize: 24 }}>{fmt(faturaCartao)}</span>
+            </div>
           </div>
 
           <section className="detalhe-secao">
-            <h2 className="section-label">Por categoria</h2>
+            <h2 className="section-label">Resumo por categoria</h2>
+            <p className="text-micro" style={{ marginBottom: 'var(--space-sm)' }}>
+              Classificação é opcional na hora de lançar — isto aqui é só um resumo do que já foi categorizado.
+            </p>
             {categorias.filter((c) => c.teto_mensal).map((cat) => {
               const gasto = gastoPorCat[cat.id] || 0
               const pct = cat.teto_mensal ? Math.min(100, (gasto / cat.teto_mensal) * 100) : 0
@@ -134,6 +149,14 @@ export default function Financeiro() {
                 </div>
               )
             })}
+            {semCategoria > 0 && (
+              <div className="linha-categoria">
+                <span aria-hidden="true">—</span>
+                <span style={{ color: 'var(--text-dim)' }}>Sem categoria</span>
+                <div />
+                <span className="text-micro">{fmt(semCategoria)}</span>
+              </div>
+            )}
           </section>
 
           {isEnabled('FIN_DIVIDAS') && dividas.length > 0 && (
@@ -158,8 +181,9 @@ export default function Financeiro() {
               <div className="lista">
                 {lancamentos.map((l) => (
                   <div key={l.id} className="item-atividade" style={{ cursor: 'default', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>
-                      <span className="text-micro" style={{ marginRight: 8 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {l.conta === 'cartao' ? <CreditCard size={12} color="var(--text-dim)" /> : <Wallet size={12} color="var(--text-dim)" />}
+                      <span className="text-micro" style={{ marginRight: 4 }}>
                         {new Date(l.data + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                       </span>
                       {l.descricao}
@@ -187,10 +211,10 @@ export default function Financeiro() {
             </div>
             <div className="campo-grade-2">
               <label className="campo">
-                <span className="text-label">Categoria</span>
-                <select value={novoLanc.categoria_id} onChange={(e) => setNovoLanc((p) => ({ ...p, categoria_id: e.target.value }))}>
-                  <option value="">Sem categoria</option>
-                  {categorias.map((c) => <option key={c.id} value={c.id}>{c.icone} {c.nome}</option>)}
+                <span className="text-label">Conta</span>
+                <select value={novoLanc.conta} onChange={(e) => setNovoLanc((p) => ({ ...p, conta: e.target.value }))}>
+                  <option value="corrente">Conta corrente</option>
+                  <option value="cartao">Cartão de crédito</option>
                 </select>
               </label>
               <label className="campo">
@@ -201,6 +225,13 @@ export default function Financeiro() {
                 </select>
               </label>
             </div>
+            <label className="campo">
+              <span className="text-label">Categoria (opcional)</span>
+              <select value={novoLanc.categoria_id} onChange={(e) => setNovoLanc((p) => ({ ...p, categoria_id: e.target.value }))}>
+                <option value="">Sem categoria</option>
+                {categorias.map((c) => <option key={c.id} value={c.id}>{c.icone} {c.nome}</option>)}
+              </select>
+            </label>
             <div className="modal-rodape" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
               <button type="button" className="btn-primario" onClick={adicionarLancamento} disabled={!novoLanc.descricao.trim() || !novoLanc.valor || enviando}>
                 {enviando ? 'Adicionando...' : 'Adicionar'}

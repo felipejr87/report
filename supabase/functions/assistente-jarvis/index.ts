@@ -33,22 +33,22 @@ function espacoIdDoToken(req: Request): string | null {
 const TOOLS = [
   {
     name: 'criar_lancamento',
-    description: 'Cria um lançamento financeiro (gasto ou receita). Use quando o Felipe disser que gastou ou recebeu algo, ou pedir para registrar uma despesa.',
+    description: 'Cria um lançamento financeiro (gasto ou receita) numa conta (corrente ou cartão de crédito) — funciona como lançar num extrato. Use quando o Felipe disser que gastou ou recebeu algo, ou pedir para registrar uma despesa. NÃO precisa perguntar a categoria: é opcional, só serve pro resumo depois.',
     input_schema: {
       type: 'object',
       properties: {
         descricao: { type: 'string', description: 'Descrição do lançamento. Ex: "Mercado Assaí", "Salário Claro"' },
         valor: { type: 'number', description: 'Valor em reais. NEGATIVO para gasto, POSITIVO para receita. Ex: -187.50 ou 9000' },
-        categoria_id: { type: 'number', description: 'ID da categoria: 1=Filha, 2=Moradia, 3=Financiamento, 4=Mercado, 5=Transporte, 6=Saúde, 7=Lazer, 8=Projetos, 9=Receita, 10=Outros' },
+        conta: { type: 'string', enum: ['corrente', 'cartao'], description: 'Qual conta: "corrente" (pix/débito/dinheiro/transferência) ou "cartao" (cartão de crédito). Se o Felipe mencionar cartão/crédito, use cartao; padrão é corrente.' },
+        categoria_id: { type: 'number', description: 'Opcional — só preencha se o Felipe mencionar a categoria de forma natural, nunca pergunte. ID: 1=Filha, 2=Moradia, 3=Financiamento, 4=Mercado, 5=Transporte, 6=Saúde, 7=Lazer, 8=Projetos, 9=Receita, 10=Outros' },
         data: { type: 'string', description: 'Data no formato YYYY-MM-DD. Use a data de hoje se não especificado.' },
-        meio: { type: 'string', enum: ['cartao', 'pix', 'debito', 'dinheiro', 'ted'], description: 'Meio de pagamento' },
       },
-      required: ['descricao', 'valor', 'categoria_id', 'data'],
+      required: ['descricao', 'valor', 'data'],
     },
   },
   {
     name: 'criar_lancamentos_lote',
-    description: 'Cria múltiplos lançamentos de uma vez. Use quando o Felipe pedir para registrar vários gastos juntos.',
+    description: 'Cria múltiplos lançamentos de uma vez. Use quando o Felipe pedir para registrar vários gastos juntos. Categoria continua opcional.',
     input_schema: {
       type: 'object',
       properties: {
@@ -59,11 +59,11 @@ const TOOLS = [
             properties: {
               descricao: { type: 'string' },
               valor: { type: 'number' },
+              conta: { type: 'string', enum: ['corrente', 'cartao'] },
               categoria_id: { type: 'number' },
               data: { type: 'string' },
-              meio: { type: 'string' },
             },
-            required: ['descricao', 'valor', 'categoria_id', 'data'],
+            required: ['descricao', 'valor', 'data'],
           },
         },
       },
@@ -170,7 +170,7 @@ serve(async (req) => {
       { data: proximoEvento },
       { data: recentesConcluidas },
     ] = await Promise.all([
-      supabase.from('lancamentos').select('valor, descricao, categoria_id, data').eq('espaco_id', espacoId).gte('data', `${mes}-01`),
+      supabase.from('lancamentos').select('valor, descricao, categoria_id, conta, data').eq('espaco_id', espacoId).gte('data', `${mes}-01`),
       supabase.from('dividas').select('id, nome, saldo_atual, parcela, taxa_mensal').eq('espaco_id', espacoId).eq('ativa', true),
       supabase.from('categorias_fin').select('id, nome, teto_mensal').eq('espaco_id', espacoId),
       supabase.from('objetivos').select('descricao, pilar_id, prazo').eq('espaco_id', espacoId).eq('status', 'ativo'),
@@ -184,13 +184,16 @@ serve(async (req) => {
       supabase.from('atividades').select('nome, atualizado_em').eq('espaco_id', espacoId).eq('fase', 'entregue').order('atualizado_em', { ascending: false }).limit(3),
     ])
 
-    const receita = lancamentos?.filter((l) => l.valor > 0).reduce((s, l) => s + l.valor, 0) || 0
-    const gastos = lancamentos?.filter((l) => l.valor < 0).reduce((s, l) => s + Math.abs(l.valor), 0) || 0
-    const saldo = receita - gastos
+    const lancCorrente = (lancamentos || []).filter((l) => l.conta !== 'cartao')
+    const lancCartao = (lancamentos || []).filter((l) => l.conta === 'cartao')
+    const saldoCorrente = lancCorrente.reduce((s, l) => s + l.valor, 0)
+    const faturaCartao = lancCartao.filter((l) => l.valor < 0).reduce((s, l) => s + Math.abs(l.valor), 0)
 
     const gastoPorCat: Record<number, number> = {}
+    let semCategoria = 0
     lancamentos?.filter((l) => l.valor < 0).forEach((l) => {
       if (l.categoria_id != null) gastoPorCat[l.categoria_id] = (gastoPorCat[l.categoria_id] || 0) + Math.abs(l.valor)
+      else semCategoria += Math.abs(l.valor)
     })
 
     // 4.1 — dia da semana e hora atuais
@@ -203,18 +206,17 @@ serve(async (req) => {
 CONTEXTO DO FELIPE — ${agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
 AGORA: ${diaHora}
 
-FINANCEIRO:
-- Receita do mês: R$ ${receita.toFixed(2)}
-- Gastos do mês: R$ ${gastos.toFixed(2)}
-- Saldo disponível: R$ ${saldo.toFixed(2)}
-- ${lancamentos?.length === 0 ? 'Nenhum lançamento registrado ainda este mês.' : `${lancamentos?.length} lançamentos registrados.`}
+FINANCEIRO (organizado por conta, como um extrato — categoria é só resumo, não obrigatória):
+- Conta corrente: saldo R$ ${saldoCorrente.toFixed(2)} (${lancCorrente.length} lançamentos este mês)
+- Cartão de crédito: fatura do mês R$ ${faturaCartao.toFixed(2)} (${lancCartao.length} lançamentos)
 
-CATEGORIAS (gasto / teto):
+RESUMO POR CATEGORIA (gasto / teto — informativo, não pergunte categoria ao lançar):
 ${categorias?.filter((c) => c.teto_mensal).map((c) => {
   const g = gastoPorCat[c.id] || 0
   const pct = Math.round((g / c.teto_mensal) * 100)
   return `- [${c.id}] ${c.nome}: R$${g.toFixed(0)} / R$${c.teto_mensal} (${pct}%)`
 }).join('\n') || 'Nenhuma categoria com teto.'}
+${semCategoria > 0 ? `- Sem categoria: R$${semCategoria.toFixed(2)}` : ''}
 
 DÍVIDAS ATIVAS:
 ${dividas?.map((d) => `- ${d.nome}: saldo R$${d.saldo_atual}, parcela R$${d.parcela || 0}`).join('\n') || 'Nenhuma'}
@@ -282,7 +284,11 @@ PADRÃO OPERACIONAL:
 - Ao trocar de assunto/projeto no meio da conversa, sinalize: "Mudando para [tema]."
 - Se o Felipe estiver dispersando em muitos projetos, lembre as prioridades ativas.
 - Recomendações de compra: 3 opções (econômica/intermediária/premium) + recomendação
-  final + forma de pagamento baseada no saldo real do banco.
+  final + forma de pagamento baseada no saldo real da conta corrente e na fatura
+  aberta do cartão (nunca invente esses números).
+- Ao lançar gasto/receita, não pergunte a categoria — é opcional, só entra se o
+  Felipe mencionar de forma natural. Pergunte a conta (corrente/cartão) só se
+  não der pra inferir da frase.
 - Perguntas sobre financeiro: use os dados reais do contexto, nunca estime.
 
 ${contexto}`
@@ -402,16 +408,23 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
         espaco_id: espacoId,
         descricao: input.descricao,
         valor: input.valor,
-        categoria_id: input.categoria_id,
+        conta: input.conta === 'cartao' ? 'cartao' : 'corrente',
+        categoria_id: input.categoria_id || null,
         data: input.data,
-        meio: input.meio || null,
       })
       if (error) throw new Error(error.message)
-      return `Lançamento criado: ${input.descricao} (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) em ${input.data}`
+      return `Lançamento criado na conta ${input.conta === 'cartao' ? 'cartão' : 'corrente'}: ${input.descricao} (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) em ${input.data}`
     }
 
     case 'criar_lancamentos_lote': {
-      const itens = input.lancamentos.map((l: any) => ({ ...l, espaco_id: espacoId }))
+      const itens = input.lancamentos.map((l: any) => ({
+        espaco_id: espacoId,
+        descricao: l.descricao,
+        valor: l.valor,
+        conta: l.conta === 'cartao' ? 'cartao' : 'corrente',
+        categoria_id: l.categoria_id || null,
+        data: l.data,
+      }))
       const { error } = await supabase.from('lancamentos').insert(itens)
       if (error) throw new Error(error.message)
       const total = itens.reduce((s: number, l: any) => s + l.valor, 0)
@@ -458,10 +471,12 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
       const mes = input.mes || new Date().toISOString().slice(0, 7)
       switch (input.tipo) {
         case 'financeiro_mes': {
-          const { data: lncs } = await supabase.from('lancamentos').select('valor, descricao, categoria_id, data').eq('espaco_id', espacoId).gte('data', `${mes}-01`)
-          const receita = lncs?.filter((l: any) => l.valor > 0).reduce((s: number, l: any) => s + l.valor, 0) || 0
-          const gastos = lncs?.filter((l: any) => l.valor < 0).reduce((s: number, l: any) => s + Math.abs(l.valor), 0) || 0
-          return `Mês ${mes}: receita R$${receita.toFixed(2)}, gastos R$${gastos.toFixed(2)}, saldo R$${(receita - gastos).toFixed(2)}, ${lncs?.length || 0} lançamentos.`
+          const { data: lncs } = await supabase.from('lancamentos').select('valor, descricao, categoria_id, conta, data').eq('espaco_id', espacoId).gte('data', `${mes}-01`)
+          const correnteN = lncs?.filter((l: any) => l.conta !== 'cartao') || []
+          const cartaoN = lncs?.filter((l: any) => l.conta === 'cartao') || []
+          const saldoCorrenteN = correnteN.reduce((s: number, l: any) => s + l.valor, 0)
+          const faturaCartaoN = cartaoN.filter((l: any) => l.valor < 0).reduce((s: number, l: any) => s + Math.abs(l.valor), 0)
+          return `Mês ${mes}: conta corrente saldo R$${saldoCorrenteN.toFixed(2)} (${correnteN.length} lançamentos), cartão fatura R$${faturaCartaoN.toFixed(2)} (${cartaoN.length} lançamentos).`
         }
         case 'dividas': {
           const { data: divs } = await supabase.from('dividas').select('nome, saldo_atual, parcela').eq('espaco_id', espacoId).eq('ativa', true)
