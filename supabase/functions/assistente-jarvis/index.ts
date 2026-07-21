@@ -29,26 +29,28 @@ function espacoIdDoToken(req: Request): string | null {
 // Fases de ATIVIDADE (discovery/refinamento/downstream/entregue) são
 // diferentes das fases de PROJETO (discovery/construcao/lancamento/
 // operacao/pausado/encerrado) — criar_atividade usa o enum de atividade.
+// lancamentos são organizados por conta (corrente/cartao), não por
+// categoria — categoria é opcional, só serve pro resumo depois.
 // =====================================================
 const TOOLS = [
   {
     name: 'criar_lancamento',
-    description: 'Cria um lançamento financeiro (gasto ou receita) numa conta (corrente ou cartão de crédito) — funciona como lançar num extrato. Use quando o Felipe disser que gastou ou recebeu algo, ou pedir para registrar uma despesa. NÃO precisa perguntar a categoria: é opcional, só serve pro resumo depois.',
+    description: 'Cria um lançamento financeiro numa conta (corrente ou cartão de crédito) — como lançar num extrato. Passa por confirmação antes de executar.',
     input_schema: {
       type: 'object',
       properties: {
-        descricao: { type: 'string', description: 'Descrição do lançamento. Ex: "Mercado Assaí", "Salário Claro"' },
-        valor: { type: 'number', description: 'Valor em reais. NEGATIVO para gasto, POSITIVO para receita. Ex: -187.50 ou 9000' },
-        conta: { type: 'string', enum: ['corrente', 'cartao'], description: 'Qual conta: "corrente" (pix/débito/dinheiro/transferência) ou "cartao" (cartão de crédito). Se o Felipe mencionar cartão/crédito, use cartao; padrão é corrente.' },
-        categoria_id: { type: 'number', description: 'Opcional — só preencha se o Felipe mencionar a categoria de forma natural, nunca pergunte. ID: 1=Filha, 2=Moradia, 3=Financiamento, 4=Mercado, 5=Transporte, 6=Saúde, 7=Lazer, 8=Projetos, 9=Receita, 10=Outros' },
-        data: { type: 'string', description: 'Data no formato YYYY-MM-DD. Use a data de hoje se não especificado.' },
+        descricao: { type: 'string' },
+        valor: { type: 'number', description: 'Negativo=gasto, positivo=receita' },
+        conta: { type: 'string', enum: ['corrente', 'cartao'], description: 'Padrão corrente; use cartao se o Felipe mencionar cartão/crédito.' },
+        categoria_id: { type: 'number', description: 'Opcional, só se mencionado naturalmente. 1=Filha,2=Moradia,3=Financiamento,4=Mercado,5=Transporte,6=Saúde,7=Lazer,8=Projetos,9=Receita,10=Outros' },
+        data: { type: 'string', description: 'YYYY-MM-DD' },
       },
       required: ['descricao', 'valor', 'data'],
     },
   },
   {
     name: 'criar_lancamentos_lote',
-    description: 'Cria múltiplos lançamentos de uma vez. Use quando o Felipe pedir para registrar vários gastos juntos. Categoria continua opcional.',
+    description: 'Cria múltiplos lançamentos de uma vez. Passa por confirmação antes de executar.',
     input_schema: {
       type: 'object',
       properties: {
@@ -72,64 +74,83 @@ const TOOLS = [
   },
   {
     name: 'atualizar_divida',
-    description: 'Atualiza o saldo atual de uma dívida. Use quando o Felipe pagar uma parcela ou quitar algo.',
+    description: 'Atualiza o saldo de uma dívida. Passa por confirmação antes de executar.',
     input_schema: {
       type: 'object',
       properties: {
-        nome_divida: { type: 'string', description: 'Nome ou parte do nome da dívida para localizar' },
-        novo_saldo: { type: 'number', description: 'Novo saldo devedor em reais' },
+        nome_divida: { type: 'string' },
+        novo_saldo: { type: 'number' },
       },
       required: ['nome_divida', 'novo_saldo'],
     },
   },
   {
     name: 'salvar_perfil',
-    description: 'Salva peso/altura/preferências do Felipe. Use quando ele informar esses dados.',
+    description: 'Salva peso/altura/preferências do Felipe. Não precisa de confirmação — é só cadastro.',
     input_schema: {
       type: 'object',
       properties: {
-        peso: { type: 'number', description: 'Peso em kg' },
-        altura: { type: 'number', description: 'Altura em cm' },
-        preferencias: { type: 'object', description: 'Preferências variadas, ex: {"parcelamento_max": 12}' },
+        peso: { type: 'number' },
+        altura: { type: 'number' },
+        preferencias: { type: 'object' },
       },
     },
   },
   {
     name: 'criar_atividade',
-    description: 'Cria uma nova atividade (tarefa) dentro de um projeto existente.',
+    description: 'Cria uma atividade (tarefa) num projeto existente. Passa por confirmação antes de executar.',
     input_schema: {
       type: 'object',
       properties: {
-        nome: { type: 'string', description: 'Nome da atividade' },
-        resumo: { type: 'string', description: 'Descrição curta do que é a atividade — se o Felipe não der uma, use o próprio nome.' },
-        projeto_nome: { type: 'string', description: 'Nome ou parte do nome do projeto onde criar' },
-        fase: { type: 'string', enum: ['discovery', 'refinamento', 'downstream', 'entregue'], description: 'Fase da atividade (não confundir com fase de projeto)' },
-        responsavel: { type: 'string', description: 'Responsável. Default: Felipe' },
-        prazo: { type: 'string', description: 'Data prevista de conclusão, formato YYYY-MM-DD (opcional)' },
+        nome: { type: 'string' },
+        resumo: { type: 'string', description: 'Se o Felipe não der, use o próprio nome.' },
+        projeto_nome: { type: 'string' },
+        fase: { type: 'string', enum: ['discovery', 'refinamento', 'downstream', 'entregue'], description: 'Fase de atividade — não confundir com fase de projeto.' },
+        responsavel: { type: 'string' },
+        prazo: { type: 'string', description: 'YYYY-MM-DD, opcional' },
       },
       required: ['nome', 'projeto_nome'],
     },
   },
   {
-    name: 'buscar_contexto',
-    description: 'Busca informações específicas e atualizadas no banco antes de responder.',
+    name: 'criar_evento',
+    description: 'Cria um evento no calendário. Passa por confirmação antes de executar.',
     input_schema: {
       type: 'object',
       properties: {
-        tipo: {
-          type: 'string',
-          enum: ['financeiro_mes', 'dividas', 'projetos', 'atividades_paradas', 'habitos_semana'],
-        },
-        mes: { type: 'string', description: 'Mês no formato YYYY-MM. Default: mês atual' },
+        titulo: { type: 'string' },
+        inicio: { type: 'string', description: 'ISO 8601 com timezone' },
+        fim: { type: 'string' },
+        pilar_id: { type: 'number', description: '1=Filha,2=Carreira,3=Ecossistemas,4=Financeiro,5=Corpo,6=Criativo' },
+      },
+      required: ['titulo', 'inicio'],
+    },
+  },
+  {
+    name: 'buscar_contexto',
+    description: 'Busca dados específicos e atualizados do banco antes de responder.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', enum: ['financeiro_mes', 'dividas', 'projetos', 'atividades_urgentes', 'habitos'] },
       },
       required: ['tipo'],
     },
   },
+  {
+    name: 'buscar_tempo',
+    description: 'Busca a previsão do tempo para Santo André, SP.',
+    input_schema: {
+      type: 'object',
+      properties: { dias: { type: 'number', description: 'Dias de previsão. Default: 1' } },
+    },
+  },
 ]
 
-// Ferramentas que escrevem no banco — usadas pra sinalizar no system
-// prompt que precisam de confirmação explícita antes de executar.
-const FERRAMENTAS_ESCRITA = ['criar_lancamento', 'criar_lancamentos_lote', 'atualizar_divida', 'salvar_perfil', 'criar_atividade']
+// Ferramentas de escrita — sempre passam pelo protocolo de confirmação
+// (o pedido para antes de executar, o front mostra um card, e só na
+// confirmação explícita o backend chama executarFerramenta de fato).
+const FERRAMENTAS_ESCRITA = ['criar_lancamento', 'criar_lancamentos_lote', 'atualizar_divida', 'criar_atividade', 'criar_evento']
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
@@ -144,16 +165,31 @@ serve(async (req) => {
     const espacoId = espacoIdDoToken(req)
     if (!espacoId) return jsonResponse({ ok: false, erro: 'Sessão inválida.' }, 401)
 
-    const { mensagens } = await req.json()
-    if (!Array.isArray(mensagens) || mensagens.length === 0) {
-      return jsonResponse({ ok: false, erro: 'Nenhuma mensagem enviada.' }, 400)
-    }
-
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
     const { data: espaco } = await supabase.from('espacos').select('jarvis_enabled').eq('id', espacoId).single()
     if (!espaco?.jarvis_enabled) {
       return jsonResponse({ ok: false, erro: 'Assistente disponível apenas para o espaço Jarvis.' }, 403)
+    }
+
+    const { mensagens, confirmar_acao } = await req.json()
+
+    // =====================================================
+    // CONFIRMAÇÃO DE AÇÃO PENDENTE — executa direto, sem passar pelo
+    // modelo de novo. O front manda exatamente {tool, input} que veio
+    // na resposta anterior.
+    // =====================================================
+    if (confirmar_acao?.tool) {
+      try {
+        const resultado = await executarFerramenta(confirmar_acao.tool, confirmar_acao.input, espacoId, supabase)
+        return jsonResponse({ ok: true, acao_executada: resultado })
+      } catch (e) {
+        return jsonResponse({ ok: false, erro: e instanceof Error ? e.message : 'Erro ao executar.' }, 500)
+      }
+    }
+
+    if (!Array.isArray(mensagens) || mensagens.length === 0) {
+      return jsonResponse({ ok: false, erro: 'Nenhuma mensagem enviada.' }, 400)
     }
 
     const agora = new Date()
@@ -168,20 +204,19 @@ serve(async (req) => {
       { data: habitos },
       { data: perfil },
       { data: proximoEvento },
-      { data: recentesConcluidas },
+      { data: urgentes },
     ] = await Promise.all([
-      supabase.from('lancamentos').select('valor, descricao, categoria_id, conta, data').eq('espaco_id', espacoId).gte('data', `${mes}-01`),
-      supabase.from('dividas').select('id, nome, saldo_atual, parcela, taxa_mensal').eq('espaco_id', espacoId).eq('ativa', true),
+      supabase.from('lancamentos').select('valor, categoria_id, conta').eq('espaco_id', espacoId).gte('data', `${mes}-01`),
+      supabase.from('dividas').select('nome, saldo_atual, parcela').eq('espaco_id', espacoId).eq('ativa', true),
       supabase.from('categorias_fin').select('id, nome, teto_mensal').eq('espaco_id', espacoId),
       supabase.from('objetivos').select('descricao, pilar_id, prazo').eq('espaco_id', espacoId).eq('status', 'ativo'),
       supabase.from('projetos').select('id, nome, fase, pilar_id').eq('espaco_id', espacoId),
       supabase.from('habitos').select('nome, frequencia_semanal').eq('espaco_id', espacoId).eq('ativo', true),
       supabase.from('jarvis_perfil').select('*').eq('espaco_id', espacoId).maybeSingle(),
-      // 4.3 — próximo evento do calendário
-      supabase.from('eventos_cal').select('titulo, inicio').eq('espaco_id', espacoId).gte('inicio', agora.toISOString()).order('inicio').limit(1).maybeSingle(),
-      // 4.2 — últimas concluídas: atividades não têm coluna `concluida`/`concluida_em`
-      // (decisão da R1: conclusão = fase='entregue', timestamp = atualizado_em).
-      supabase.from('atividades').select('nome, atualizado_em').eq('espaco_id', espacoId).eq('fase', 'entregue').order('atualizado_em', { ascending: false }).limit(3),
+      supabase.from('eventos_cal').select('titulo, inicio').eq('espaco_id', espacoId).gt('inicio', agora.toISOString()).order('inicio').limit(1).maybeSingle(),
+      // atividades não têm `deadline`/`concluida` — prazo real é data_fim,
+      // conclusão real é fase='entregue'.
+      supabase.from('atividades').select('nome, data_fim').eq('espaco_id', espacoId).neq('fase', 'entregue').not('data_fim', 'is', null).lte('data_fim', new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0]).order('data_fim').limit(3),
     ])
 
     const lancCorrente = (lancamentos || []).filter((l) => l.conta !== 'cartao')
@@ -196,103 +231,87 @@ serve(async (req) => {
       else semCategoria += Math.abs(l.valor)
     })
 
-    // 4.1 — dia da semana e hora atuais
-    const diaHora = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) +
-      ' às ' + agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-
-    const analise = await analisarPadroes(espacoId, supabase)
+    const agoraBRT = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
 
     const contexto = `
-CONTEXTO DO FELIPE — ${agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-AGORA: ${diaHora}
+AGORA: ${agoraBRT.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })} às ${agoraBRT.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+PRÓXIMO EVENTO: ${proximoEvento ? `${proximoEvento.titulo} — ${new Date(proximoEvento.inicio).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : 'Nenhum'}
+ATIVIDADES COM PRAZO PRÓXIMO: ${urgentes?.map((a) => `${a.nome} (vence ${a.data_fim})`).join('; ') || 'Nenhuma'}
 
-FINANCEIRO (organizado por conta, como um extrato — categoria é só resumo, não obrigatória):
-- Conta corrente: saldo R$ ${saldoCorrente.toFixed(2)} (${lancCorrente.length} lançamentos este mês)
-- Cartão de crédito: fatura do mês R$ ${faturaCartao.toFixed(2)} (${lancCartao.length} lançamentos)
-
-RESUMO POR CATEGORIA (gasto / teto — informativo, não pergunte categoria ao lançar):
+FINANCEIRO ${mes} (por conta — categoria é só resumo, nunca obrigatória):
+- Conta corrente: saldo R$${saldoCorrente.toFixed(2)}
+- Cartão de crédito: fatura do mês R$${faturaCartao.toFixed(2)}
+${lancamentos?.length === 0 ? '- Nenhum lançamento registrado ainda.' : ''}
 ${categorias?.filter((c) => c.teto_mensal).map((c) => {
   const g = gastoPorCat[c.id] || 0
   const pct = Math.round((g / c.teto_mensal) * 100)
-  return `- [${c.id}] ${c.nome}: R$${g.toFixed(0)} / R$${c.teto_mensal} (${pct}%)`
-}).join('\n') || 'Nenhuma categoria com teto.'}
+  const alerta = pct >= 100 ? ' ⚠' : pct >= 80 ? ' !' : ''
+  return `- ${c.nome}: R$${g.toFixed(0)}/R$${c.teto_mensal} (${pct}%)${alerta}`
+}).join('\n') || ''}
 ${semCategoria > 0 ? `- Sem categoria: R$${semCategoria.toFixed(2)}` : ''}
 
-DÍVIDAS ATIVAS:
-${dividas?.map((d) => `- ${d.nome}: saldo R$${d.saldo_atual}, parcela R$${d.parcela || 0}`).join('\n') || 'Nenhuma'}
-
-PROJETOS:
-${projetos?.map((p) => `- [${p.id}] ${p.nome} (${p.fase})`).join('\n') || 'Nenhum'}
-
-OBJETIVOS:
-${objetivos?.map((o) => `- ${o.descricao}${o.prazo ? ` → ${new Date(o.prazo).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })}` : ''}`).join('\n') || 'Nenhum'}
-
+DÍVIDAS: ${dividas?.map((d) => `${d.nome}: R$${d.saldo_atual} (parcela R$${d.parcela})`).join(' | ') || 'Nenhuma'}
+PROJETOS: ${projetos?.map((p) => `${p.nome} [${p.fase}]`).join(', ') || 'Nenhum'}
+OBJETIVOS ATIVOS: ${objetivos?.map((o) => o.descricao).join(' | ') || 'Nenhum'}
 HÁBITOS: ${habitos?.map((h) => h.nome).join(', ') || 'Nenhum'}
-
-PERFIL FÍSICO: ${perfil ? `${perfil.peso ?? '?'}kg / ${perfil.altura ?? '?'}cm` : 'Não informado — perguntar quando relevante'}
-
-PRÓXIMO EVENTO: ${proximoEvento ? `${proximoEvento.titulo} em ${new Date(proximoEvento.inicio).toLocaleString('pt-BR')}` : 'Nenhum'}
-
-CONCLUÍDAS RECENTEMENTE: ${recentesConcluidas?.length ? recentesConcluidas.map((a) => a.nome).join(', ') : 'Nenhuma'}
-${analise.sugestoes.length > 0 ? `
-PADRÕES IDENTIFICADOS (use se for relevante para a conversa — não force):
-${analise.sugestoes.includes('POUCOS_LANCAMENTOS') ? '- Poucos lançamentos este mês. Se o Felipe não registrar, ofereça ajuda para lançar.' : ''}
-${analise.sugestoes.includes('MUITAS_ATIVIDADES_PARADAS') ? `- ${analise.atividades_paradas} atividades paradas há mais de 7 dias.` : ''}
-${analise.sugestoes.includes('HABITOS_INCONSISTENTES') ? '- Poucos checks de hábito esta semana.' : ''}` : ''}
+PERFIL: ${perfil?.peso ? `${perfil.peso}kg / ${perfil.altura}cm` : 'Não informado'}
 `
 
-    const systemPrompt = `Você é o Jarvis, Chief of Staff e COO integrado do Felipe.
+    // =====================================================
+    // SYSTEM PROMPT — PERSONA JARVIS
+    // =====================================================
+    const systemPrompt = `Você é J.A.R.V.I.S. — Just A Rather Very Intelligent System.
+Assistente pessoal do Felipe. Chief of Staff. COO da vida dele.
 
-QUEM É O FELIPE:
-CEO não-técnico, pai solo (filha sob sua guarda principal), atleta em reconstrução,
-construtor de dois ecossistemas de produtos (AURA e Sistemas Locais) e profissional
-de produto/agilidade em telecom (Claro, oportunidade Vivo).
+PERSONA:
+Intelecto analítico. Postura formal e polida — mordomo britânico de alta inteligência.
+Lealdade incondicional ao Felipe. Humor seco e sarcástico quando cabe, nunca forçado.
+Português brasileiro natural — sem soar traduzido. Você CONHECE o Felipe, não é
+um assistente genérico.
 
-PRIORIDADES (nesta ordem — sempre):
-1. Visão integrada da vida: conecte decisões entre áreas. Se uma decisão de produto
-   compromete treino, filha ou finanças, aponte o conflito explicitamente.
-2. Vida pessoal: treino consistente (Full Body A/B, ~140g proteína/dia),
-   tempo de qualidade com a filha, saúde financeira (reset out/2026, quitar R$22k).
-3. Execução dos produtos: Agenda em fase de venda real é o foco comercial agora.
-   AURA em construção. Nenhum produto novo sem encerrar ou pausar um ativo.
-4. Carreira: Claro (AI Router Agent, go-live set/2026) e oportunidades externas.
+COMO CHAMAR:
+- Cotidiano: "Felipe"
+- Alertas e situações críticas: "Sr. Felipe"
+- Nunca: "usuário" ou qualquer tratamento genérico/frio
 
-TOM E POSTURA:
-- Eficiente e direto no trabalho. Diagnóstico antes de solução. Sem enrolação.
-- Desafie ideias quando vir furos. Discordância bem fundamentada > concordância vazia.
-- Filosófico quando o assunto pede (cosmologia, IA, consciência) — com rigor lógico.
-- Português brasileiro natural. Sem formalidade excessiva. Sem "Claro!", "Ótimo!".
-- Nunca elogie a pergunta. Vá direto à resposta.
+TOM — EXEMPLOS:
+❌ "Ótimo! Com certeza posso ajudar com isso!"       ✅ "Posso. Qual o valor?"
+❌ "Que boa pergunta!"                                ✅ [responde direto]
+❌ "Entendido! Vou registrar agora!"                  ✅ "Registrado. Saldo: R$ 2.160."
+✅ "Sr. Felipe, o teto de moradia foi ultrapassado em 15%."
+✅ "Três demandas com prazo esta semana. Nenhuma avançou ontem."
+Nunca abre com validação vazia. Nunca elogia a pergunta. Vai direto ao ponto.
+Para voz: máximo 2 frases. Para texto: máximo 3 parágrafos.
 
-GUARDRAILS — REGRAS INEGOCIÁVEIS:
-1. CONFIRME ANTES DE EXECUTAR: antes de usar qualquer ferramenta que escreve no banco
-   (${FERRAMENTAS_ESCRITA.join(', ')}), descreva em texto o que você vai fazer e
-   PARE — não chame a ferramenta ainda. Só chame a ferramenta na mensagem seguinte,
-   depois que o Felipe confirmar explicitamente.
-   Exceção: se o Felipe já disser "pode fazer" ou "confirmo" na mesma mensagem do
-   pedido, pode executar direto, sem esse passo extra.
-2. NUNCA INVENTE DADOS: se não tiver a informação no contexto, pergunte.
-   Não assuma valores, datas ou nomes.
-3. MÁXIMO 1 CONFRONTO POR SESSÃO: quando identificar padrão de evitação
-   (mais documentação que execução, mais projetos que lançamentos), aponte
-   uma vez, com dado específico e uma ação mínima proposta. Não repita.
-4. MÁXIMO 3 PRIORIDADES POR RESPOSTA: nunca liste mais de 3 ações ou sugestões
-   de uma vez. O Felipe já tem muito na cabeça.
-5. DECISÕES COM IMPACTO FINANCEIRO OU LEGAL: sempre consulte antes de agir.
+PRIORIDADES DO FELIPE (nesta ordem):
+1. Vida integrada — conecte decisões entre áreas; aponte conflitos entre pilares.
+2. Filha e família — ela mora com o Felipe; compromissos com ela têm prioridade.
+3. Vida pessoal: treino (Full Body A/B, meta 140g proteína/dia), saúde financeira
+   (reset out/2026, quitar R$22k do financiamento).
+4. Produtos: Agenda em venda real é o foco comercial agora. AURA em construção.
+   Nenhum produto novo sem pausar ou encerrar um ativo.
+5. Carreira: Claro (AI Router Agent, go-live set/2026) e oportunidades externas.
 
-PADRÃO OPERACIONAL:
-- Ao trocar de assunto/projeto no meio da conversa, sinalize: "Mudando para [tema]."
-- Se o Felipe estiver dispersando em muitos projetos, lembre as prioridades ativas.
-- Recomendações de compra: 3 opções (econômica/intermediária/premium) + recomendação
-  final + forma de pagamento baseada no saldo real da conta corrente e na fatura
-  aberta do cartão (nunca invente esses números).
-- Ao lançar gasto/receita, não pergunte a categoria — é opcional, só entra se o
-  Felipe mencionar de forma natural. Pergunte a conta (corrente/cartão) só se
-  não der pra inferir da frase.
-- Perguntas sobre financeiro: use os dados reais do contexto, nunca estime.
+REGRAS INEGOCIÁVEIS:
+1. NUNCA invente dados. Se não souber, pergunte.
+2. NUNCA mencione finanças sem ser perguntado ou sem relevância direta.
+3. Ferramentas de escrita (${FERRAMENTAS_ESCRITA.join(', ')}) sempre passam por uma
+   tela de confirmação automática antes de executar — isso é tratado pelo app, você
+   não precisa "esperar" nem perguntar de novo. Ao usá-las, inclua um texto curto
+   explicando o que está prestes a fazer.
+4. NÃO pergunte a categoria ao lançar no financeiro — é opcional, só entra se
+   mencionada naturalmente. Pergunte a conta (corrente/cartão) só se não der
+   pra inferir da frase.
+5. MÁXIMO 1 confronto por sessão — baseado em dado real, com ação mínima proposta.
+6. MÁXIMO 3 sugestões por resposta.
+7. Ao trocar de assunto: "Mudando para [tema]."
 
 ${contexto}`
 
+    // =====================================================
+    // LOOP — ferramentas de leitura executam direto; ferramentas de
+    // escrita interrompem o loop e retornam uma proposta de confirmação.
+    // =====================================================
     const msgAtual: any[] = [...mensagens]
     let respostaFinal = ''
     let iteracoes = 0
@@ -323,36 +342,40 @@ ${contexto}`
       }
 
       const resultado = await anthropicRes.json()
-
-      if (resultado.type === 'error') {
-        throw new Error(resultado.error?.message || 'Erro na API Anthropic')
-      }
+      if (resultado.type === 'error') throw new Error(resultado.error?.message || 'Erro na API Anthropic')
 
       if (resultado.stop_reason === 'tool_use') {
-        msgAtual.push({ role: 'assistant', content: resultado.content })
+        const blocoEscrita = resultado.content.find((b: any) => b.type === 'tool_use' && FERRAMENTAS_ESCRITA.includes(b.name))
 
+        if (blocoEscrita) {
+          const descricao = gerarDescricao(blocoEscrita.name, blocoEscrita.input)
+          const textoProposta = resultado.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
+          return jsonResponse({
+            ok: true,
+            requer_confirmacao: true,
+            resposta: textoProposta || descricao,
+            proposta: { tool: blocoEscrita.name, input: blocoEscrita.input, descricao },
+          })
+        }
+
+        // Só ferramentas de leitura chegam aqui — executa e continua o loop.
+        msgAtual.push({ role: 'assistant', content: resultado.content })
         const toolResults = []
         for (const block of resultado.content) {
           if (block.type !== 'tool_use') continue
-
           let toolResult = ''
           try {
             toolResult = await executarFerramenta(block.name, block.input, espacoId, supabase)
           } catch (e) {
             toolResult = `Erro ao executar ${block.name}: ${e instanceof Error ? e.message : String(e)}`
           }
-
           toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: toolResult })
         }
-
         msgAtual.push({ role: 'user', content: toolResults })
         continue
       }
 
-      respostaFinal = (resultado.content || [])
-        .filter((b: any) => b.type === 'text')
-        .map((b: any) => b.text)
-        .join('\n')
+      respostaFinal = (resultado.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
       break
     }
 
@@ -363,38 +386,22 @@ ${contexto}`
   }
 })
 
-// =====================================================
-// ANÁLISE EMPÍRICA DE PADRÕES DE USO
-// =====================================================
-async function analisarPadroes(espacoId: string, supabase: any) {
-  const agora = new Date()
-  const semanaPassada = new Date(agora.getTime() - 7 * 86400000)
-  const mesPassado = new Date(agora.getTime() - 30 * 86400000)
-
-  const [
-    { data: conversasRecentes },
-    { data: lancamentosRecentes },
-    { data: atividadesParadas },
-    { data: habitoChecks },
-  ] = await Promise.all([
-    supabase.from('conversas').select('criado_em').eq('espaco_id', espacoId).gte('criado_em', semanaPassada.toISOString()),
-    supabase.from('lancamentos').select('data').eq('espaco_id', espacoId).gte('data', mesPassado.toISOString().slice(0, 10)),
-    // atividades não têm coluna `concluida` — conclusão é fase='entregue'.
-    supabase.from('atividades').select('nome, atualizado_em').eq('espaco_id', espacoId).neq('fase', 'entregue').lt('atualizado_em', semanaPassada.toISOString()),
-    // habito_checks não tem espaco_id direto — filtra via join com habitos.
-    supabase.from('habito_checks').select('data, habito_id, habitos!inner(espaco_id)').eq('habitos.espaco_id', espacoId).gte('data', semanaPassada.toISOString().slice(0, 10)),
-  ])
-
-  const sugestoes: string[] = []
-
-  if ((lancamentosRecentes?.length || 0) < 5) sugestoes.push('POUCOS_LANCAMENTOS')
-  if ((atividadesParadas?.length || 0) > 3) sugestoes.push('MUITAS_ATIVIDADES_PARADAS')
-  if ((habitoChecks?.length || 0) < 2) sugestoes.push('HABITOS_INCONSISTENTES')
-
-  return {
-    uso_semanal: conversasRecentes?.length || 0,
-    sugestoes,
-    atividades_paradas: atividadesParadas?.length || 0,
+function gerarDescricao(tool: string, input: any): string {
+  switch (tool) {
+    case 'criar_lancamento':
+      return `Criar "${input.descricao}" (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) em ${input.data}, conta ${input.conta === 'cartao' ? 'cartão' : 'corrente'}.`
+    case 'criar_lancamentos_lote': {
+      const total = input.lancamentos.reduce((s: number, l: any) => s + Math.abs(l.valor), 0)
+      return `Criar ${input.lancamentos.length} lançamentos — total R$${total.toFixed(2)}.`
+    }
+    case 'atualizar_divida':
+      return `Atualizar "${input.nome_divida}" → saldo R$${input.novo_saldo}.`
+    case 'criar_atividade':
+      return `Criar atividade "${input.nome}" em "${input.projeto_nome}".`
+    case 'criar_evento':
+      return `Criar evento "${input.titulo}" em ${new Date(input.inicio).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
+    default:
+      return `Executar: ${tool}`
   }
 }
 
@@ -413,7 +420,7 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
         data: input.data,
       })
       if (error) throw new Error(error.message)
-      return `Lançamento criado na conta ${input.conta === 'cartao' ? 'cartão' : 'corrente'}: ${input.descricao} (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) em ${input.data}`
+      return `Lançamento criado: ${input.descricao} (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}).`
     }
 
     case 'criar_lancamentos_lote': {
@@ -428,7 +435,7 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
       const { error } = await supabase.from('lancamentos').insert(itens)
       if (error) throw new Error(error.message)
       const total = itens.reduce((s: number, l: any) => s + l.valor, 0)
-      return `${itens.length} lançamentos criados. Total: R$${total.toFixed(2)}`
+      return `${itens.length} lançamentos criados. Total: R$${total.toFixed(2)}.`
     }
 
     case 'atualizar_divida': {
@@ -437,7 +444,7 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
       if (!divida) return `Dívida "${input.nome_divida}" não encontrada.`
       const { error } = await supabase.from('dividas').update({ saldo_atual: input.novo_saldo }).eq('id', divida.id)
       if (error) throw new Error(error.message)
-      return `Dívida "${divida.nome}" atualizada: novo saldo R$${input.novo_saldo.toFixed(2)}`
+      return `Saldo de "${divida.nome}" atualizado para R$${input.novo_saldo.toFixed(2)}.`
     }
 
     case 'salvar_perfil': {
@@ -447,13 +454,13 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
       if (input.preferencias) dados.preferencias = input.preferencias
       const { error } = await supabase.from('jarvis_perfil').upsert(dados, { onConflict: 'espaco_id' })
       if (error) throw new Error(error.message)
-      return `Perfil atualizado: ${JSON.stringify(dados)}`
+      return `Perfil atualizado.`
     }
 
     case 'criar_atividade': {
       const { data: projetosDoEspaco } = await supabase.from('projetos').select('id, nome').eq('espaco_id', espacoId)
       const projeto = projetosDoEspaco?.find((p: any) => p.nome.toLowerCase().includes(input.projeto_nome.toLowerCase()))
-      if (!projeto) return `Projeto "${input.projeto_nome}" não encontrado. Projetos disponíveis: ${projetosDoEspaco?.map((p: any) => p.nome).join(', ')}`
+      if (!projeto) return `Projeto "${input.projeto_nome}" não encontrado. Disponíveis: ${projetosDoEspaco?.map((p: any) => p.nome).join(', ')}`
       const { error } = await supabase.from('atividades').insert({
         espaco_id: espacoId,
         projeto_id: projeto.id,
@@ -464,47 +471,61 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
         data_fim: input.prazo || null,
       })
       if (error) throw new Error(error.message)
-      return `Atividade "${input.nome}" criada no projeto "${projeto.nome}"`
+      return `Atividade "${input.nome}" criada em "${projeto.nome}".`
+    }
+
+    case 'criar_evento': {
+      const { error } = await supabase.from('eventos_cal').insert({
+        espaco_id: espacoId,
+        titulo: input.titulo,
+        inicio: input.inicio,
+        fim: input.fim || null,
+        pilar_id: input.pilar_id || null,
+      })
+      if (error) throw new Error(error.message)
+      return `Evento "${input.titulo}" criado.`
     }
 
     case 'buscar_contexto': {
-      const mes = input.mes || new Date().toISOString().slice(0, 7)
+      const mes = new Date().toISOString().slice(0, 7)
       switch (input.tipo) {
         case 'financeiro_mes': {
-          const { data: lncs } = await supabase.from('lancamentos').select('valor, descricao, categoria_id, conta, data').eq('espaco_id', espacoId).gte('data', `${mes}-01`)
+          const { data: lncs } = await supabase.from('lancamentos').select('valor, conta').eq('espaco_id', espacoId).gte('data', `${mes}-01`)
           const correnteN = lncs?.filter((l: any) => l.conta !== 'cartao') || []
           const cartaoN = lncs?.filter((l: any) => l.conta === 'cartao') || []
-          const saldoCorrenteN = correnteN.reduce((s: number, l: any) => s + l.valor, 0)
-          const faturaCartaoN = cartaoN.filter((l: any) => l.valor < 0).reduce((s: number, l: any) => s + Math.abs(l.valor), 0)
-          return `Mês ${mes}: conta corrente saldo R$${saldoCorrenteN.toFixed(2)} (${correnteN.length} lançamentos), cartão fatura R$${faturaCartaoN.toFixed(2)} (${cartaoN.length} lançamentos).`
+          const saldoN = correnteN.reduce((s: number, l: any) => s + l.valor, 0)
+          const faturaN = cartaoN.filter((l: any) => l.valor < 0).reduce((s: number, l: any) => s + Math.abs(l.valor), 0)
+          return `${mes}: conta corrente R$${saldoN.toFixed(2)}, fatura cartão R$${faturaN.toFixed(2)}.`
         }
         case 'dividas': {
           const { data: divs } = await supabase.from('dividas').select('nome, saldo_atual, parcela').eq('espaco_id', espacoId).eq('ativa', true)
-          return divs?.map((d: any) => `${d.nome}: R$${d.saldo_atual} (parcela R$${d.parcela})`).join('; ') || 'Nenhuma dívida ativa.'
+          return divs?.map((d: any) => `${d.nome}: R$${d.saldo_atual} (parcela R$${d.parcela})`).join(' | ') || 'Nenhuma dívida.'
         }
         case 'projetos': {
           const { data: projs } = await supabase.from('projetos').select('nome, fase').eq('espaco_id', espacoId)
-          return projs?.map((p: any) => `${p.nome} (${p.fase})`).join('; ') || 'Nenhum projeto.'
+          return projs?.map((p: any) => `${p.nome} [${p.fase}]`).join(', ') || 'Nenhum projeto.'
         }
-        case 'atividades_paradas': {
-          const { data: ats } = await supabase
-            .from('atividades')
-            .select('nome, atualizado_em')
-            .eq('espaco_id', espacoId)
-            .neq('fase', 'entregue')
-            .lt('atualizado_em', new Date(Date.now() - 3 * 86400000).toISOString())
-          return ats?.map((a: any) => {
-            const dias = Math.floor((Date.now() - new Date(a.atualizado_em).getTime()) / 86400000)
-            return `${a.nome} (${dias}d)`
-          }).join(', ') || 'Nenhuma atividade parada.'
+        case 'atividades_urgentes': {
+          const { data: ats } = await supabase.from('atividades').select('nome, data_fim').eq('espaco_id', espacoId).neq('fase', 'entregue').not('data_fim', 'is', null).lte('data_fim', new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]).order('data_fim').limit(5)
+          return ats?.map((a: any) => `${a.nome} (${a.data_fim})`).join(', ') || 'Nenhuma urgente.'
         }
-        case 'habitos_semana': {
+        case 'habitos': {
           const { data: habs } = await supabase.from('habitos').select('nome, frequencia_semanal').eq('espaco_id', espacoId).eq('ativo', true)
-          return habs?.map((h: any) => `${h.nome} (meta ${h.frequencia_semanal}x/semana)`).join('; ') || 'Nenhum hábito.'
+          return habs?.map((h: any) => `${h.nome} (${h.frequencia_semanal}x/sem)`).join(', ') || 'Nenhum.'
         }
         default:
-          return 'Tipo de contexto não reconhecido.'
+          return 'Tipo não reconhecido.'
       }
+    }
+
+    case 'buscar_tempo': {
+      const dias = Math.min(Math.max(input.dias || 1, 1), 7)
+      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=-23.6737&longitude=-46.5264&current=temperature_2m,weathercode,precipitation&timezone=America%2FSao_Paulo&forecast_days=${dias}`)
+      const clima = await res.json()
+      const temp = Math.round(clima.current.temperature_2m)
+      const codigo = clima.current.weathercode
+      const descs: Record<number, string> = { 0: 'céu limpo', 1: 'poucas nuvens', 2: 'parcialmente nublado', 3: 'nublado', 61: 'chuva leve', 63: 'chuva moderada', 80: 'pancadas de chuva', 95: 'tempestade' }
+      return `Santo André: ${temp}°C, ${descs[codigo] || 'tempo variável'}. Precipitação: ${clima.current.precipitation}mm.`
     }
 
     default:
