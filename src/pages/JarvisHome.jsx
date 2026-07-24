@@ -574,7 +574,15 @@ export default function JarvisHome() {
             type="button"
             className="chat-mic"
             data-ativo={escutando}
-            onClick={() => { if (!escutando && vozAutomatica) desbloquear(); (escutando ? pararEscuta : iniciarEscuta)() }}
+            onClick={() => {
+              // Solta a sessão de áudio de reprodução antes de pedir a de
+              // gravação — no iOS, alternar entre falar e ouvir sem soltar
+              // a anterior é uma causa conhecida de captura de voz instável.
+              pararFala()
+              if (!escutando && vozAutomatica) desbloquear()
+              if (escutando) pararEscuta()
+              else iniciarEscuta()
+            }}
             title={escutando ? t('mic_parar') : t('mic_falar')}
             aria-label={escutando ? t('parar_captura') : t('falar_assistente')}
           >
