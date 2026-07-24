@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { urlFuncao } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { useUsuario } from '../hooks/useUsuario'
 import ThemeToggle from '../components/ThemeToggle'
 
 async function chamarFuncao(nome, body) {
@@ -27,8 +26,6 @@ export default function Entrada() {
   const [carregando, setCarregando] = useState(false)
 
   const { entrar } = useAuth()
-  const { usuario, setUsuario } = useUsuario()
-  const [seuNome, setSeuNome] = useState(usuario || '')
   const navigate = useNavigate()
 
   async function handleEntrar(e) {
@@ -38,7 +35,6 @@ export default function Entrada() {
     try {
       const { token, espaco } = await chamarFuncao('entrar-espaco', { codigo, senha })
       entrar(token, espaco)
-      setUsuario(seuNome)
       navigate(espaco.jarvis_enabled ? '/jarvis' : '/projetos')
     } catch (err) {
       setErro(err.message)
@@ -61,7 +57,6 @@ export default function Entrada() {
       await chamarFuncao('criar-espaco', { codigo, nome, senha })
       const { token, espaco: espacoLogin } = await chamarFuncao('entrar-espaco', { codigo, senha })
       entrar(token, espacoLogin)
-      setUsuario(seuNome)
       navigate(espacoLogin.jarvis_enabled ? '/jarvis' : '/projetos')
     } catch (err) {
       setErro(err.message)
@@ -91,10 +86,6 @@ export default function Entrada() {
                 <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="EQUIPE-X" autoComplete="off" required />
               </label>
               <label className="campo">
-                <span className="text-label">Seu nome</span>
-                <input value={seuNome} onChange={(e) => setSeuNome(e.target.value)} placeholder="Como aparece no histórico" required />
-              </label>
-              <label className="campo">
                 <span className="text-label">Senha</span>
                 <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required />
               </label>
@@ -111,10 +102,6 @@ export default function Entrada() {
               <label className="campo">
                 <span className="text-label">Nome do espaço</span>
                 <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Squad de Produto" required />
-              </label>
-              <label className="campo">
-                <span className="text-label">Seu nome</span>
-                <input value={seuNome} onChange={(e) => setSeuNome(e.target.value)} placeholder="Como aparece no histórico" required />
               </label>
               <label className="campo">
                 <span className="text-label">Senha (mín. 8 caracteres)</span>

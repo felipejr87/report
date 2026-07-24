@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom'
 import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check, Umbrella, Bell, BellOff, Loader2, Wallet, Dumbbell, Flag, ArrowRight } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
@@ -213,6 +213,7 @@ export default function JarvisHome() {
   const [conversaId, setConversaId] = useState(null)
   const [mensagens, setMensagens] = useState([])
   const [input, setInput] = useState('')
+  const [textoInterim, setTextoInterim] = useState('')
   const [carregando, setCarregando] = useState(false)
   const [mostrarHistorico, setMostrarHistorico] = useState(false)
   const [vozAutomatica, setVozAutomatica] = useState(() => localStorage.getItem(CHAVE_VOZ_AUTO) === 'true')
@@ -237,7 +238,14 @@ export default function JarvisHome() {
     else pararFala()
   }
 
-  const cliente = sessao ? supabaseEspaco(sessao.token) : null
+  // Memoizado: supabaseEspaco(token) recriava um cliente novo a cada
+  // render, o que mudava a identidade de carregarSugestoes (deps
+  // [cliente, idioma]) a cada render → novaConversa mudava de
+  // identidade também → o efeito de montagem (que depende de
+  // novaConversa) reexecutava sem parar, resetando `mensagens` pra
+  // uma saudação nova a cada render (o "piscar") e apagando qualquer
+  // mensagem que o usuário tivesse acabado de enviar no meio disso.
+  const cliente = useMemo(() => (sessao ? supabaseEspaco(sessao.token) : null), [sessao?.token])
 
   useEffect(() => {
     if (!pushSuportado) return
@@ -389,9 +397,15 @@ export default function JarvisHome() {
       await cliente.from('conversas').update({ atualizado_em: new Date().toISOString() }).eq('id', convId)
     }
 
+    // now() é avaliado uma vez por statement no Postgres — inserir
+    // várias linhas num único insert() dava o mesmo criado_em pra
+    // usuário e assistente, deixando a ordem entre os dois instável
+    // ao recarregar o histórico. Escalona 1ms por mensagem pra
+    // garantir ordem estável (usuário sempre antes do assistente).
+    const agora = Date.now()
     const novas = historico.slice(-qtdNovas)
     await cliente.from('conversa_mensagens').insert(
-      novas.map((m) => ({ conversa_id: convId, role: m.role, content: m.content }))
+      novas.map((m, i) => ({ conversa_id: convId, role: m.role, content: m.content, criado_em: new Date(agora + i).toISOString() }))
     )
   }
 
@@ -461,8 +475,9 @@ export default function JarvisHome() {
   }
 
   const { iniciarEscuta, pararEscuta, escutando, suportado } = useVoz({
-    onTranscricao: (texto) => enviar(texto),
-    onErro: (e) => toast?.erro(typeof e === 'string' ? e : t('erro_captura_voz')),
+    onTranscricao: (texto) => { setTextoInterim(''); enviar(texto) },
+    onInterim: (texto) => setTextoInterim(texto),
+    onErro: (e) => { setTextoInterim(''); toast?.erro(typeof e === 'string' ? e : t('erro_captura_voz')) },
     idioma,
   })
 
@@ -658,10 +673,11 @@ export default function JarvisHome() {
           className="chat-input"
           type="text"
           placeholder={escutando ? t('ouvindo') : t('fale_com_jarvis')}
-          value={input}
+          value={escutando ? textoInterim : input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && enviar()}
-          disabled={carregando || escutando}
+          disabled={carregando}
+          readOnly={escutando}
         />
         <button type="button" className="chat-enviar" onClick={() => enviar()} disabled={!input.trim() || carregando} aria-label={t('enviar_aria')}>
           <ArrowUp size={18} />
