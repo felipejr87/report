@@ -80,7 +80,7 @@ export function useJarvisVoz(token, idioma = 'pt') {
       const res = await fetch(urlFuncao('jarvis-tts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ texto }),
+        body: JSON.stringify({ texto, idioma }),
       })
 
       if (!res.ok || res.headers.get('Content-Type')?.includes('json')) {

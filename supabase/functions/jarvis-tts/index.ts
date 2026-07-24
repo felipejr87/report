@@ -18,6 +18,81 @@ function espacoIdDoToken(req: Request): string | null {
   }
 }
 
+// Prepara o texto pra soar natural na síntese — números, siglas e
+// símbolos que o modelo de voz não sabe pronunciar de forma legível.
+// idioma usa a mesma convenção 'pt'|'en' do resto do app (useIdioma),
+// não 'pt-BR'/'en-US'.
+function prepararTextoParaVoz(texto: string, idioma: 'pt' | 'en' = 'pt'): string {
+  let t = texto
+
+  // Markdown e links
+  t = t.replace(/\*\*(.*?)\*\*/g, '$1')
+  t = t.replace(/\*(.*?)\*/g, '$1')
+  t = t.replace(/#{1,6}\s/g, '')
+  t = t.replace(/`(.*?)`/g, '$1')
+  t = t.replace(/\[(.*?)\]\(.*?\)/g, '$1')
+
+  if (idioma === 'pt') {
+    // Moeda — mais importante. O grupo antes da vírgula pode ter
+    // separador de milhar ("22.180,50") — precisa tirar o ponto dos
+    // dois ramos (com e sem centavos), senão sobra um "." literal.
+    t = t.replace(/R\$\s*([\d.]+),([\d]{2})/g, (_m, inteiro: string, centavos: string) => `${inteiro.replace(/\./g, ' ')} reais e ${centavos} centavos`)
+    t = t.replace(/R\$\s*([\d.]+)/g, (_m, v: string) => `${v.replace(/\./g, ' ')} reais`)
+    t = t.replace(/R\$/g, 'reais')
+    t = t.replace(/\$\s*([\d.,]+)/g, '$1 dólares')
+    t = t.replace(/€\s*([\d.,]+)/g, '$1 euros')
+
+    // Porcentagem
+    t = t.replace(/(\d+(?:,\d+)?)%/g, '$1 por cento')
+
+    // Siglas — "IA" usa lookbehind negativo pra não pegar o final de
+    // "POD-IA" (produto real do Felipe) e virar "POD-inteligência artificial".
+    t = t.replace(/\bOKR\b/g, 'O K R')
+    t = t.replace(/\bKPI\b/g, 'K P I')
+    t = t.replace(/\bAPI\b/g, 'A P I')
+    t = t.replace(/\bLLM\b/g, 'L L M')
+    t = t.replace(/(?<!-)\bIA\b/g, 'inteligência artificial')
+    t = t.replace(/\bCEO\b/g, 'C E O')
+    t = t.replace(/\bPO\b/g, 'P O')
+    t = t.replace(/\bQ(\d)\b/g, 'trimestre $1')
+    t = t.replace(/\bSr\.\s/g, 'Senhor ')
+    t = t.replace(/\bDr\.\s/g, 'Doutor ')
+
+    // Datas e horas
+    t = t.replace(/(\d{2})\/(\d{2})\/(\d{4})/g, '$1 de $2 de $3')
+    t = t.replace(/(\d{2})\/(\d{2})/g, '$1 de $2')
+    t = t.replace(/(\d{1,2}):(\d{2})/g, '$1 e $2')
+
+    // Símbolos → pausas naturais
+    t = t.replace(/✓\s*/g, 'concluído, ')
+    t = t.replace(/→\s*/g, '. ')
+    t = t.replace(/⚠\s*/g, 'atenção, ')
+    t = t.replace(/⚡\s*/g, '')
+    t = t.replace(/•\s*/g, ', ')
+    t = t.replace(/—/g, ', ')
+
+    // Quebras de linha
+    t = t.replace(/\n{2,}/g, '. ')
+    t = t.replace(/\n/g, ', ')
+  } else {
+    t = t.replace(/R\$\s*([\d.,]+)/g, '$1 reais')
+    t = t.replace(/\$\s*([\d.,]+)/g, '$1 dollars')
+    t = t.replace(/(\d+)%/g, '$1 percent')
+    t = t.replace(/✓\s*/g, 'done, ')
+    t = t.replace(/→\s*/g, '. ')
+    t = t.replace(/\n+/g, '. ')
+    t = t.replace(/—/g, ', ')
+  }
+
+  t = t.replace(/,\s*,/g, ',')
+  t = t.replace(/\.\s*\./g, '.')
+  t = t.replace(/\s+/g, ' ')
+  t = t.trim()
+
+  // Limitar tamanho para economizar créditos
+  return t.slice(0, 500)
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
@@ -50,7 +125,9 @@ serve(async (req) => {
       })
     }
 
-    const { texto } = await req.json()
+    const { texto, idioma: idiomaBody } = await req.json()
+    const idioma: 'pt' | 'en' = idiomaBody === 'en' ? 'en' : 'pt'
+
     if (!texto?.trim()) {
       return new Response(JSON.stringify({ erro: 'Texto vazio.' }), {
         status: 400,
@@ -58,20 +135,7 @@ serve(async (req) => {
       })
     }
 
-    // Limpar markdown antes de enviar para TTS
-    const textoLimpo = texto
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/\*(.*?)\*/g, '$1')
-      .replace(/#{1,6}\s/g, '')
-      .replace(/`(.*?)`/g, '$1')
-      .replace(/✓\s*/g, '')
-      .replace(/→\s*/g, '')
-      .replace(/⚡\s*/g, '')
-      .replace(/\n+/g, '. ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      // Limitar tamanho para economizar créditos
-      .slice(0, 500)
+    const textoLimpo = prepararTextoParaVoz(texto, idioma)
 
     if (!textoLimpo) {
       return new Response(JSON.stringify({ erro: 'Texto vazio após limpeza.' }), {
@@ -80,9 +144,8 @@ serve(async (req) => {
       })
     }
 
-    // Chamar ElevenLabs TTS — eleven_turbo_v2_5 é multilíngue (cobre
-    // pt-BR e en, então a resposta do assistente já sai no idioma
-    // certo sem precisar mandar idioma separado pra cá).
+    // Chamar ElevenLabs TTS — a mesma voz (britânica) serve pra pt e en
+    // com eleven_turbo_v2_5, que é multilíngue.
     const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
       method: 'POST',
       headers: {
