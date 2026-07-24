@@ -1213,6 +1213,34 @@ a.link-acao { text-decoration-line: underline; }
   font-style: italic;
 }
 
+.bv-sugestoes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+.bv-sugestao-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px var(--space-sm);
+  background: color-mix(in srgb, var(--jarvis-ciano) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--jarvis-ciano) 30%, transparent);
+  border-radius: var(--space-sm);
+  color: var(--jarvis-ciano);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease);
+}
+.bv-sugestao-btn:hover {
+  background: color-mix(in srgb, var(--jarvis-ciano) 14%, transparent);
+  border-color: color-mix(in srgb, var(--jarvis-ciano) 50%, transparent);
+}
+.bv-sug-msg { flex: 1; color: var(--text-mid); }
+.bv-sug-arrow { flex-shrink: 0; color: var(--jarvis-ciano); }
+
 /* =============================================
    Assistente Jarvis — histórico de conversas
    ============================================= */

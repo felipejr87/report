@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Navigate, useSearchParams } from 'react-router-dom'
-import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check, Umbrella, Bell, BellOff, Loader2 } from 'lucide-react'
+import { Navigate, useSearchParams, useNavigate } from 'react-router-dom'
+import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check, Umbrella, Bell, BellOff, Loader2, Wallet, Dumbbell, Flag, ArrowRight } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { useIdioma } from '../hooks/useIdioma'
@@ -140,6 +140,21 @@ const TEXTO_SAUDACAO = {
   },
 }
 
+// Textos dos cards de sugestão proativa — assim como TEXTO_SAUDACAO,
+// ficam colados aqui por serem usados só dentro de gerarSugestoes.
+const TEXTO_SUGESTAO = {
+  pt: {
+    semLancamentos: 'Nenhum lançamento essa semana — vale registrar os gastos.',
+    habitosPendentes: (n) => `${n} hábito${n > 1 ? 's' : ''} sem marcar essa semana.`,
+    atividadeParada: (nome) => `"${nome}" está parada — sem atualização há dias.`,
+  },
+  en: {
+    semLancamentos: 'No entries logged this week — worth tracking your spending.',
+    habitosPendentes: (n) => `${n} habit${n > 1 ? 's' : ''} unchecked this week.`,
+    atividadeParada: (nome) => `"${nome}" is stalled — no update in days.`,
+  },
+}
+
 // Constrói a saudação inicial usando o briefing (clima/agenda/atividades)
 // já carregado — conteúdo muda de peso conforme o período do dia:
 // manhã = digest completo, tarde = leve, noite = sugestões + fechamento.
@@ -204,11 +219,13 @@ export default function JarvisHome() {
   const [acaoPendente, setAcaoPendente] = useState(null)
   const [confirmando, setConfirmando] = useState(false)
   const [briefing, setBriefing] = useState(null)
+  const [sugestoes, setSugestoes] = useState([])
   const [notifAtivo, setNotifAtivo] = useState(false)
   const [notifCarregando, setNotifCarregando] = useState(false)
   const rodapeRef = useRef(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const msgInicialEnviada = useRef(false)
+  const navegar = useNavigate()
 
   const { falar, pararFala, falando, carregandoAudio, suportado: falaSuportada, desbloquear } = useJarvisVoz(sessao.token, idioma)
 
@@ -281,6 +298,36 @@ export default function JarvisHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessao?.token, idioma])
 
+  // Sugestões proativas — derivadas do mesmo briefing (paradas,
+  // hábitos pendentes) mais uma checagem própria de lançamentos da
+  // semana, já que jarvis-briefing não cobre financeiro. Máximo 2
+  // visíveis por vez pra não virar ruído.
+  const carregarSugestoes = useCallback(async (dadosBriefing) => {
+    if (!cliente || !dadosBriefing) { setSugestoes([]); return }
+    const lang = idioma === 'en' ? 'en' : 'pt'
+    const s = TEXTO_SUGESTAO[lang]
+    const lista = []
+
+    const inicioSemana = new Date()
+    inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay())
+    const { count } = await cliente
+      .from('lancamentos')
+      .select('id', { count: 'exact', head: true })
+      .gte('data', inicioSemana.toISOString().split('T')[0])
+    if (!count) lista.push({ id: 'financeiro', Icon: Wallet, mensagem: s.semLancamentos, rota: '/financeiro' })
+
+    if (dadosBriefing.habitosPendentes?.length > 0) {
+      lista.push({ id: 'habitos', Icon: Dumbbell, mensagem: s.habitosPendentes(dadosBriefing.habitosPendentes.length), rota: '/vida' })
+    }
+
+    if (dadosBriefing.paradas?.length > 0) {
+      lista.push({ id: 'paradas', Icon: Flag, mensagem: s.atividadeParada(dadosBriefing.paradas[0].nome), rota: '/projetos' })
+    }
+
+    setSugestoes(lista.slice(0, 2))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cliente, idioma])
+
   const carregarConversas = useCallback(async () => {
     if (!cliente) return
     const { data } = await cliente.from('conversas').select('id, titulo, atualizado_em').order('atualizado_em', { ascending: false }).limit(20)
@@ -296,8 +343,9 @@ export default function JarvisHome() {
 
     const dados = await carregarBriefing()
     setMensagens([{ role: 'assistant', content: montarSaudacao(dados, idioma) }])
+    carregarSugestoes(dados)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessao?.token, carregarBriefing, idioma])
+  }, [sessao?.token, carregarBriefing, carregarSugestoes, idioma])
 
   useEffect(() => { carregarConversas(); novaConversa() }, [carregarConversas, novaConversa])
   useEffect(() => { rodapeRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens, acaoPendente])
@@ -397,7 +445,7 @@ export default function JarvisHome() {
       setAcaoPendente(null)
       if (vozAutomatica) falar(texto)
       await persistirConversa(novoHistorico, texto, 1)
-      carregarBriefing()
+      carregarBriefing().then(carregarSugestoes)
     } catch {
       toast?.erro(t('erro_conexao_confirmar'))
     }
@@ -449,6 +497,23 @@ export default function JarvisHome() {
           {(briefing.urgentes?.length > 0 || briefing.paradas?.length > 0) && (
             <div className="bv-sugestao-inline">
               → {briefing.urgentes?.length > 0 ? `"${briefing.urgentes[0].nome}" — ${t('prazo_proximo')}` : `"${briefing.paradas[0].nome}" ${t('parada_dias')}`}
+            </div>
+          )}
+
+          {sugestoes.length > 0 && (
+            <div className="bv-sugestoes">
+              {sugestoes.map((sug) => (
+                <button
+                  key={sug.id}
+                  type="button"
+                  className="bv-sugestao-btn"
+                  onClick={() => navegar(sug.rota)}
+                >
+                  <sug.Icon size={14} />
+                  <span className="bv-sug-msg">{sug.mensagem}</span>
+                  <ArrowRight size={13} className="bv-sug-arrow" />
+                </button>
+              ))}
             </div>
           )}
         </div>

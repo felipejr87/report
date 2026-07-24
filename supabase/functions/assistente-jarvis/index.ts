@@ -98,6 +98,19 @@ const TOOLS = [
     },
   },
   {
+    name: 'salvar_aprendizado',
+    description: 'Salva informação que o Felipe forneceu sobre si mesmo no perfil. Usar quando ele responder uma pergunta de aprendizado ou mencionar informação pessoal relevante espontaneamente. Não precisa de confirmação — é só cadastro.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        campo: { type: 'string', description: 'Campo do perfil: peso_altura | nome_filha | escola_filha | parcelamento_max | horario_treino | medico_regular | contato_chave | saude | rotina | preferencia' },
+        valor: { type: 'object', description: 'Dados a salvar. Ex: {"peso": 82, "altura": 178} ou {"nome": "Ana"} ou {"nome": "Matheus", "contexto": "IBM", "tipo": "profissional"}' },
+        marcar_pergunta_respondida: { type: 'boolean', description: 'true se isso responde uma pergunta pendente de aprendizado ativo' },
+      },
+      required: ['campo', 'valor'],
+    },
+  },
+  {
     name: 'criar_atividade',
     description: 'Cria uma atividade (tarefa) num projeto existente. Passa por confirmação antes de executar.',
     input_schema: {
@@ -218,6 +231,7 @@ serve(async (req) => {
       { data: perfil },
       { data: proximoEvento },
       { data: urgentes },
+      { data: perguntaPendente },
     ] = await Promise.all([
       supabase.from('lancamentos').select('valor, categoria_id, conta').eq('espaco_id', espacoId).gte('data', `${mes}-01`),
       supabase.from('dividas').select('nome, saldo_atual, parcela').eq('espaco_id', espacoId).eq('ativa', true),
@@ -230,6 +244,8 @@ serve(async (req) => {
       // atividades não têm `deadline`/`concluida` — prazo real é data_fim,
       // conclusão real é fase='entregue'.
       supabase.from('atividades').select('nome, data_fim').eq('espaco_id', espacoId).neq('fase', 'entregue').not('data_fim', 'is', null).lte('data_fim', new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0]).order('data_fim').limit(3),
+      // Aprendizado ativo — próxima pergunta de perfil ainda não respondida.
+      supabase.from('jarvis_perguntas_pendentes').select('id, campo, pergunta, contexto').eq('espaco_id', espacoId).eq('respondida', false).order('prioridade', { ascending: true }).limit(1).maybeSingle(),
     ])
 
     const lancCorrente = (lancamentos || []).filter((l) => l.conta !== 'cartao')
@@ -245,6 +261,43 @@ serve(async (req) => {
     })
 
     const agoraBRT = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+
+    // Perfil expandido — só entra no contexto o que já foi preenchido.
+    const perfilPartes: string[] = []
+    if (perfil?.peso) perfilPartes.push(`${perfil.peso}kg / ${perfil.altura || '?'}cm`)
+    if (perfil?.nome_filha) perfilPartes.push(`filha: ${perfil.nome_filha}`)
+    if (perfil?.escola_filha) perfilPartes.push(`escola: ${perfil.escola_filha}`)
+    if (perfil?.rotina && Object.keys(perfil.rotina).length > 0) perfilPartes.push(`rotina: ${JSON.stringify(perfil.rotina)}`)
+    if (perfil?.saude && Object.keys(perfil.saude).length > 0) perfilPartes.push(`saúde: ${JSON.stringify(perfil.saude)}`)
+    if (perfil?.preferencias && Object.keys(perfil.preferencias).length > 0) perfilPartes.push(`preferências: ${JSON.stringify(perfil.preferencias)}`)
+    if (perfil?.contatos_chave?.length > 0) perfilPartes.push(`contatos: ${JSON.stringify(perfil.contatos_chave)}`)
+    const perfilCompleto = perfilPartes.length > 0 ? perfilPartes.join(' | ') : 'Não preenchido ainda.'
+
+    // Aprendizado ativo — só pergunta se: tem pergunta pendente, é a
+    // primeira mensagem da conversa (não interromper no meio de nada), e
+    // o assunto não é urgente.
+    const isPrimeirasMensagens = mensagens.filter((m: any) => m.role === 'user').length <= 1
+    const isAssuntoUrgente = mensagens.some((m: any) =>
+      m.role === 'user' && /\burgent|\bprazo|\bdeadline|\berro|\bbug|\bproblema urgente\b/i.test(m.content)
+    )
+    const devePergunta = !!perguntaPendente && isPrimeirasMensagens && !isAssuntoUrgente
+
+    const contextoPergunta = devePergunta ? `
+
+APRENDIZADO ATIVO — INSTRUÇÃO IMPORTANTE:
+No final desta resposta, após responder ao Felipe, adicione UMA pergunta para
+completar seu perfil. Integre naturalmente — não como formulário.
+Campo a preencher: ${perguntaPendente.campo}
+Pergunta sugerida: "${perguntaPendente.pergunta}"
+Contexto: ${perguntaPendente.contexto || 'sem contexto adicional'}
+
+Exemplo de como integrar naturalmente:
+"[resposta normal]... A propósito — ${perguntaPendente.pergunta}"
+
+Se o Felipe responder a pergunta nesta ou na próxima mensagem, use a
+ferramenta salvar_aprendizado (com marcar_pergunta_respondida: true) para
+registrar a informação.
+` : ''
 
     const contexto = `
 AGORA: ${agoraBRT.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })} às ${agoraBRT.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -267,8 +320,8 @@ DÍVIDAS: ${dividas?.map((d) => `${d.nome}: R$${d.saldo_atual} (parcela R$${d.pa
 PROJETOS: ${projetos?.map((p) => `${p.nome} [${p.fase}]`).join(', ') || 'Nenhum'}
 OBJETIVOS ATIVOS: ${objetivos?.map((o) => o.descricao).join(' | ') || 'Nenhum'}
 HÁBITOS: ${habitos?.map((h) => h.nome).join(', ') || 'Nenhum'}
-PERFIL: ${perfil?.peso ? `${perfil.peso}kg / ${perfil.altura}cm` : 'Não informado'}
-`
+PERFIL: ${perfilCompleto}
+${contextoPergunta}`
 
     // =====================================================
     // SYSTEM PROMPT — PERSONA JARVIS (definitivo)
@@ -392,6 +445,23 @@ REGRAS OPERACIONAIS INEGOCIÁVEIS
 8. Decisões com impacto financeiro, legal ou arquitetural: consultar antes de agir.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+APRENDIZADO SOBRE O FELIPE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Quando o Felipe mencionar espontaneamente informação pessoal relevante
+(nome da filha, peso, altura, médico, contato importante, preferência
+financeira, rotina, sintoma de saúde), use salvar_aprendizado para
+registrar antes de responder — sem pedir confirmação para informação
+óbvia que ele mesmo ofereceu. Confirme brevemente: "Anotei que [info]."
+e continue a resposta normalmente.
+
+CONTATOS: quando ele citar alguém pelo nome em contexto profissional ou
+pessoal ("o Matheus da IBM", "William"), salve como contato_chave:
+{ nome, contexto, tipo: "profissional" ou "pessoal" }.
+
+SAÚDE: qualquer sintoma, medicamento ou consulta mencionados → salve em
+saude: { sintoma, desde, data_registro }.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CONTEXTO EM TEMPO REAL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${contexto}`
@@ -451,6 +521,19 @@ Proper nouns (Felpsz, AURA, project names) stay as-is.`
         const blocoEscrita = resultado.content.find((b: any) => b.type === 'tool_use' && FERRAMENTAS_ESCRITA.includes(b.name))
 
         if (blocoEscrita) {
+          // Ferramentas imediatas no mesmo turno (ex: Felipe mencionou o
+          // peso E pediu um lançamento na mesma mensagem) precisam rodar
+          // aqui — o retorno antecipado logo abaixo interrompe o loop sem
+          // nunca chegar na execução normal, e essa informação se perderia.
+          for (const block of resultado.content) {
+            if (block.type !== 'tool_use' || block === blocoEscrita || FERRAMENTAS_ESCRITA.includes(block.name)) continue
+            try {
+              await executarFerramenta(block.name, block.input, espacoId, supabase, idioma)
+            } catch (e) {
+              console.error('[assistente-jarvis] erro em ferramenta imediata', block.name, e)
+            }
+          }
+
           const descricao = gerarDescricao(blocoEscrita.name, blocoEscrita.input, idioma)
           const textoProposta = resultado.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
           await registrarAcesso(espacoId, 'assistente', req, 200, supabase)
@@ -580,6 +663,70 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
       const { error } = await supabase.from('jarvis_perfil').upsert(dados, { onConflict: 'espaco_id' })
       if (error) throw new Error(error.message)
       return en ? 'Profile updated.' : 'Perfil atualizado.'
+    }
+
+    case 'salvar_aprendizado': {
+      const { campo, valor, marcar_pergunta_respondida } = input
+      const updates: any = { espaco_id: espacoId, atualizado_em: new Date().toISOString() }
+
+      switch (campo) {
+        case 'peso_altura':
+          if (valor.peso != null) updates.peso = valor.peso
+          if (valor.altura != null) updates.altura = valor.altura
+          break
+
+        case 'nome_filha':
+          updates.nome_filha = valor.nome
+          break
+
+        case 'escola_filha':
+          updates.escola_filha = valor.escola
+          break
+
+        case 'parcelamento_max':
+        case 'preferencia': {
+          const { data: perfilAtual } = await supabase.from('jarvis_perfil').select('preferencias').eq('espaco_id', espacoId).maybeSingle()
+          updates.preferencias = { ...(perfilAtual?.preferencias || {}), ...valor }
+          break
+        }
+
+        case 'saude': {
+          const { data: perfilAtual } = await supabase.from('jarvis_perfil').select('saude').eq('espaco_id', espacoId).maybeSingle()
+          updates.saude = { ...(perfilAtual?.saude || {}), ...valor }
+          break
+        }
+
+        case 'rotina':
+        case 'horario_treino': {
+          const { data: perfilAtual } = await supabase.from('jarvis_perfil').select('rotina').eq('espaco_id', espacoId).maybeSingle()
+          updates.rotina = { ...(perfilAtual?.rotina || {}), ...valor }
+          break
+        }
+
+        case 'contato_chave': {
+          const { data: perfilAtual } = await supabase.from('jarvis_perfil').select('contatos_chave').eq('espaco_id', espacoId).maybeSingle()
+          const contatos = perfilAtual?.contatos_chave || []
+          if (!contatos.some((c: any) => c.nome === valor.nome)) contatos.push(valor)
+          updates.contatos_chave = contatos
+          break
+        }
+
+        default: {
+          const { data: perfilAtual } = await supabase.from('jarvis_perfil').select('aprendizados').eq('espaco_id', espacoId).maybeSingle()
+          const aprendizados = perfilAtual?.aprendizados || []
+          aprendizados.push({ campo, valor, salvo_em: new Date().toISOString() })
+          updates.aprendizados = aprendizados
+        }
+      }
+
+      const { error } = await supabase.from('jarvis_perfil').upsert(updates, { onConflict: 'espaco_id' })
+      if (error) throw new Error(error.message)
+
+      if (marcar_pergunta_respondida) {
+        await supabase.from('jarvis_perguntas_pendentes').update({ respondida: true }).eq('espaco_id', espacoId).eq('campo', campo)
+      }
+
+      return `Anotado: ${campo} → ${JSON.stringify(valor)}`
     }
 
     case 'criar_atividade': {
