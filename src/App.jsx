@@ -7,6 +7,7 @@ import Timeline from './pages/Timeline'
 import Financeiro from './pages/Financeiro'
 import JarvisHome from './pages/JarvisHome'
 import Vida from './pages/Vida'
+import Seguranca from './pages/Seguranca'
 import JarvisRoute from './components/JarvisRoute'
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
 
       <Route path="/jarvis" element={<JarvisRoute><JarvisHome /></JarvisRoute>} />
       <Route path="/vida" element={<JarvisRoute><Vida /></JarvisRoute>} />
+      <Route path="/seguranca" element={<JarvisRoute><Seguranca /></JarvisRoute>} />
     </Routes>
   )
 }

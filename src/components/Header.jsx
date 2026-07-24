@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+import { Lock } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import IdiomaToggle from './IdiomaToggle'
 import UsuarioBadge from './UsuarioBadge'
@@ -21,6 +23,11 @@ export default function Header({ espaco, onSair }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
           <UsuarioBadge />
           {isJarvis && <IdiomaToggle />}
+          {isJarvis && (
+            <Link to="/seguranca" className="modal-fechar" title="Segurança & Privacidade" aria-label="Segurança & Privacidade">
+              <Lock size={16} />
+            </Link>
+          )}
           <ThemeToggle />
           <button type="button" className="link-acao" onClick={onSair}>{isJarvis ? t('sair') : 'Sair'}</button>
         </div>

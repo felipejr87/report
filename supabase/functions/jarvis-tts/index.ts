@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { checarRateLimit, registrarAcesso } from '../_shared/rate-limit.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -125,6 +126,15 @@ serve(async (req) => {
       })
     }
 
+    const { bloqueado } = await checarRateLimit(req, espacoId, 'tts', supabase)
+    if (bloqueado) {
+      await registrarAcesso(espacoId, 'tts', req, 429, supabase)
+      return new Response(JSON.stringify({ erro: 'Muitas chamadas de voz. Aguarde um momento.', fallback: true }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const { texto, idioma: idiomaBody } = await req.json()
     const idioma: 'pt' | 'en' = idiomaBody === 'en' ? 'en' : 'pt'
 
@@ -168,12 +178,14 @@ serve(async (req) => {
     if (!res.ok) {
       const erro = await res.text()
       console.error('[jarvis-tts] ElevenLabs erro:', res.status, erro)
+      await registrarAcesso(espacoId, 'tts', req, 503, supabase)
       return new Response(JSON.stringify({ erro: 'TTS indisponível.', fallback: true }), {
         status: 503,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
+    await registrarAcesso(espacoId, 'tts', req, 200, supabase)
     // Retornar o stream de áudio diretamente
     return new Response(res.body, {
       headers: { ...corsHeaders, 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-cache' },

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { checarRateLimit, registrarAcesso } from '../_shared/rate-limit.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -48,6 +49,18 @@ serve(async (req) => {
     const idioma: 'pt' | 'en' = url.searchParams.get('idioma') === 'en' ? 'en' : 'pt'
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+
+    // Mesma checagem de acesso das outras functions do Jarvis.
+    const { data: espaco } = await supabase.from('espacos').select('jarvis_enabled').eq('id', espacoId).single()
+    if (!espaco?.jarvis_enabled) {
+      return new Response(JSON.stringify({ ok: false, erro: 'Briefing disponível apenas para o espaço Jarvis.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    const { bloqueado } = await checarRateLimit(req, espacoId, 'briefing', supabase)
+    if (bloqueado) {
+      await registrarAcesso(espacoId, 'briefing', req, 429, supabase)
+      return new Response(JSON.stringify({ ok: false, erro: 'Muitas requisições. Aguarde um momento.' }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
 
     const hoje = new Date()
     const hojeStr = hoje.toISOString().split('T')[0]
@@ -123,6 +136,7 @@ serve(async (req) => {
       return 'Boa noite'
     })()
 
+    await registrarAcesso(espacoId, 'briefing', req, 200, supabase)
     return new Response(JSON.stringify({
       ok: true,
       saudacao,

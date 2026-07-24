@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { checarRateLimit, registrarAcesso } from '../_shared/rate-limit.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -175,6 +176,15 @@ serve(async (req) => {
     const { mensagens, confirmar_acao, idioma: idiomaBody } = await req.json()
     const idioma: 'pt' | 'en' = idiomaBody === 'en' ? 'en' : 'pt'
 
+    const { bloqueado } = await checarRateLimit(req, espacoId, 'assistente', supabase)
+    if (bloqueado) {
+      await registrarAcesso(espacoId, 'assistente', req, 429, supabase)
+      return jsonResponse(
+        { ok: false, erro: idioma === 'en' ? 'Too many requests. Give it a moment, Sr. Felipe.' : 'Muitas requisições. Aguarde um momento, Sr. Felipe.' },
+        429,
+      )
+    }
+
     // =====================================================
     // CONFIRMAÇÃO DE AÇÃO PENDENTE — executa direto, sem passar pelo
     // modelo de novo. O front manda exatamente {tool, input} que veio
@@ -183,8 +193,10 @@ serve(async (req) => {
     if (confirmar_acao?.tool) {
       try {
         const resultado = await executarFerramenta(confirmar_acao.tool, confirmar_acao.input, espacoId, supabase, idioma)
+        await registrarAcesso(espacoId, 'assistente', req, 200, supabase)
         return jsonResponse({ ok: true, acao_executada: resultado })
       } catch (e) {
+        await registrarAcesso(espacoId, 'assistente', req, 500, supabase)
         return jsonResponse({ ok: false, erro: e instanceof Error ? e.message : (idioma === 'en' ? 'Error executing.' : 'Erro ao executar.') }, 500)
       }
     }
@@ -428,6 +440,7 @@ Proper nouns (Felpsz, AURA, project names) stay as-is.`
 
       if (!anthropicRes.ok) {
         console.error('[assistente-jarvis] Anthropic respondeu', anthropicRes.status, await anthropicRes.text())
+        await registrarAcesso(espacoId, 'assistente', req, 502, supabase)
         return jsonResponse({ ok: false, erro: idioma === 'en' ? 'Error consulting the assistant.' : 'Erro ao consultar o assistente.' }, 502)
       }
 
@@ -440,6 +453,7 @@ Proper nouns (Felpsz, AURA, project names) stay as-is.`
         if (blocoEscrita) {
           const descricao = gerarDescricao(blocoEscrita.name, blocoEscrita.input, idioma)
           const textoProposta = resultado.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
+          await registrarAcesso(espacoId, 'assistente', req, 200, supabase)
           return jsonResponse({
             ok: true,
             requer_confirmacao: true,
@@ -471,6 +485,7 @@ Proper nouns (Felpsz, AURA, project names) stay as-is.`
       break
     }
 
+    await registrarAcesso(espacoId, 'assistente', req, 200, supabase)
     return jsonResponse({ ok: true, resposta: respostaFinal || (idioma === 'en' ? 'Could not generate a response.' : 'Não consegui gerar uma resposta.') })
   } catch (e) {
     console.error('[assistente-jarvis]', e)
