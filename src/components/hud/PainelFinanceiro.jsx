@@ -1,32 +1,44 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 
 // NOTA: o protótipo original assumia uma tabela `categorias` e
 // `categoria_id === 18` pra identificar lançamentos de cartão — essa
 // tabela não existe (é `categorias_fin`) e lançamentos são separados
 // por conta corrente/cartão via `lancamentos.conta` ('corrente' |
 // 'cartao'), igual já faz Financeiro.jsx e o assistente-jarvis.
-export default function PainelFinanceiro({ cliente, idioma = 'pt' }) {
+//
+// Saldo/fatura NÃO vêm mais da soma dos lançamentos — essa soma não
+// reflete o saldo real da conta (diagnóstico do Axis: dava -R$1.678,98
+// contra o real -R$879,27 do extrato Itaú). Fonte agora é
+// jarvis_perfil.preferencias, atualizado manualmente com o dado real.
+export default function PainelFinanceiro({ cliente, espacoId, idioma = 'pt' }) {
   const [dados, setDados] = useState(null)
+  const [saldoVisivel, setSaldoVisivel] = useState(false)
 
   const carregar = useCallback(async () => {
     if (!cliente) return
     const mes = new Date().toISOString().slice(0, 7)
-    const [{ data: lncs }, { data: dividas }] = await Promise.all([
+    const [{ data: lncs }, { data: dividas }, { data: perfil }] = await Promise.all([
       cliente.from('lancamentos').select('valor, descricao, data, conta').gte('data', `${mes}-01`).order('data', { ascending: false }),
       cliente.from('dividas').select('nome, saldo_atual, parcela').eq('ativa', true),
+      cliente.from('jarvis_perfil').select('preferencias').eq('espaco_id', espacoId).maybeSingle(),
     ])
 
     const lista = lncs || []
-    const lancCorrente = lista.filter((l) => l.conta !== 'cartao')
-    const lancCartao = lista.filter((l) => l.conta === 'cartao')
-    const saldo = lancCorrente.reduce((s, l) => s + l.valor, 0)
-    const fatura = lancCartao.filter((l) => l.valor < 0).reduce((s, l) => s + Math.abs(l.valor), 0)
+    const prefs = perfil?.preferencias || {}
     const extrato = lista.slice(0, 5)
     const barras = calcularBarrasSemanas(lista)
 
-    setDados({ saldo, fatura, extrato, dividas: dividas || [], barras })
+    setDados({
+      saldo: typeof prefs.saldo_conta_corrente === 'number' ? prefs.saldo_conta_corrente : null,
+      fatura: typeof prefs.fatura_aberta === 'number' ? prefs.fatura_aberta : null,
+      faturaVenc: prefs.fatura_vencimento || null,
+      extrato,
+      dividas: dividas || [],
+      barras,
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cliente])
+  }, [cliente, espacoId])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -46,12 +58,14 @@ export default function PainelFinanceiro({ cliente, idioma = 'pt' }) {
   }
 
   const TXT = idioma === 'en'
-    ? { carregando: 'LOADING...', extrato: 'STATEMENT', alerta: 'NEGATIVE BALANCE · INTEREST ACCRUING' }
-    : { carregando: 'CARREGANDO...', extrato: 'EXTRATO', alerta: 'CONTA NEGATIVA · JUROS ATIVOS' }
+    ? { carregando: 'LOADING...', extrato: 'STATEMENT', alerta: 'NEGATIVE BALANCE · INTEREST ACCRUING', contaCorrente: 'CHECKING ACCOUNT', faturaAberta: 'OPEN INVOICE', vence: 'due', negativo: 'Account negative — interest accruing', naoDisponivel: 'not set' }
+    : { carregando: 'CARREGANDO...', extrato: 'EXTRATO', alerta: 'CONTA NEGATIVA · JUROS ATIVOS', contaCorrente: 'CONTA CORRENTE', faturaAberta: 'FATURA ABERTA', vence: 'vence', negativo: 'Conta no negativo — juros ativos', naoDisponivel: 'não informado' }
 
   if (!dados) return <div className="hud-panel-label">{TXT.carregando}</div>
 
   const mesNome = new Date().toLocaleDateString(idioma === 'en' ? 'en-US' : 'pt-BR', { month: 'long' }).toUpperCase()
+  const temSaldo = dados.saldo != null
+  const temFatura = dados.fatura != null
 
   return (
     <>
@@ -59,12 +73,28 @@ export default function PainelFinanceiro({ cliente, idioma = 'pt' }) {
 
       <div className="fin-kpis">
         <div>
-          <div className="fin-kpi-label">CONTA CORRENTE</div>
-          <div className={`fin-kpi-valor ${dados.saldo >= 0 ? 'fin-kpi--cyan' : 'fin-kpi--amber'}`}>{fmt(dados.saldo)}</div>
+          <div className="fin-kpi-label">
+            {TXT.contaCorrente}
+            <button type="button" className="fin-eye-btn" onClick={() => setSaldoVisivel((v) => !v)} aria-label={saldoVisivel ? 'Ocultar valores' : 'Revelar valores'}>
+              {saldoVisivel ? <EyeOff size={12} /> : <Eye size={12} />}
+            </button>
+          </div>
+          <div className={`fin-kpi-valor ${(dados.saldo ?? 0) >= 0 ? 'fin-kpi--cyan' : 'fin-kpi--amber'}`}>
+            {!temSaldo ? TXT.naoDisponivel : saldoVisivel ? fmt(dados.saldo) : '••••••'}
+          </div>
+          {temSaldo && dados.saldo < 0 && saldoVisivel && <div className="fin-kpi-sub">{TXT.negativo}</div>}
         </div>
         <div>
-          <div className="fin-kpi-label">FATURA CARTÃO</div>
-          <div className="fin-kpi-valor fin-kpi--amber">{fmt(dados.fatura)}</div>
+          <div className="fin-kpi-label">
+            {TXT.faturaAberta}
+            <button type="button" className="fin-eye-btn" onClick={() => setSaldoVisivel((v) => !v)} aria-label={saldoVisivel ? 'Ocultar valores' : 'Revelar valores'}>
+              {saldoVisivel ? <EyeOff size={12} /> : <Eye size={12} />}
+            </button>
+          </div>
+          <div className="fin-kpi-valor fin-kpi--amber">{!temFatura ? TXT.naoDisponivel : saldoVisivel ? fmt(dados.fatura) : '••••••'}</div>
+          {dados.faturaVenc && (
+            <div className="fin-kpi-sub">{TXT.vence} {new Date(dados.faturaVenc + 'T12:00').toLocaleDateString(idioma === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' })}</div>
+          )}
         </div>
       </div>
 
@@ -92,7 +122,7 @@ export default function PainelFinanceiro({ cliente, idioma = 'pt' }) {
         ))}
       </div>
 
-      {dados.saldo < 0 && (
+      {temSaldo && dados.saldo < 0 && saldoVisivel && (
         <div className="fin-alerta">
           <span className="fin-alerta-dot" />
           {TXT.alerta}

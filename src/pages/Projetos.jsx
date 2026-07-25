@@ -9,6 +9,9 @@ import Header from '../components/Header'
 import FormProjeto from '../components/FormProjeto'
 import Modal from '../components/Modal'
 import TabBar from '../components/jarvis/TabBar'
+import HudPanel from '../components/hud/HudPanel'
+import HudAbaControles from '../components/hud/HudAbaControles'
+import HudTabBar from '../components/hud/HudTabBar'
 
 const MARCAS_DIACRITICAS = new RegExp(
   '[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036f) + ']', 'g'
@@ -88,121 +91,223 @@ export default function Projetos() {
   const projetosOrdenados = ordenarProjetosPorEntrega(projetosFiltrados)
   const isJarvis = sessao.espaco.jarvis_enabled === true
 
-  return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', paddingBottom: isJarvis ? 76 : 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-      <Header espaco={sessao.espaco} onSair={sair} />
+  const modalNovo = mostrarNovo && (
+    <Modal titulo="Novo projeto" onFechar={() => setMostrarNovo(false)}>
+      <FormProjeto onSalvar={criarProjeto} onCancelar={() => setMostrarNovo(false)} />
+    </Modal>
+  )
 
-      <div className="layout-espaco">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 className="text-titulo">Projetos</h1>
-          <button type="button" className="btn-primario" onClick={() => setMostrarNovo(true)}>
-            <Plus size={16} style={{ marginRight: 4, verticalAlign: -3 }} />
-            Novo projeto
-          </button>
+  // Espaços não-Jarvis mantêm o rastreador genérico no visual padrão
+  // (claro/escuro do app) — o HUD é a identidade exclusiva do espaço
+  // do Felipe, não faz sentido pra times usando isso como ferramenta comum.
+  if (!isJarvis) {
+    return (
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+        <Header espaco={sessao.espaco} onSair={sair} />
+
+        <div className="layout-espaco">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h1 className="text-titulo">Projetos</h1>
+            <button type="button" className="btn-primario" onClick={() => setMostrarNovo(true)}>
+              <Plus size={16} style={{ marginRight: 4, verticalAlign: -3 }} />
+              Novo projeto
+            </button>
+          </div>
+
+          <label className="campo-busca">
+            <Search size={16} color="var(--text-dim)" />
+            <input type="search" placeholder="Buscar projeto ou atividade..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+            {busca && (
+              <button type="button" className="modal-fechar" onClick={() => setBusca('')} aria-label="Limpar busca">
+                <X size={14} />
+              </button>
+            )}
+          </label>
+
+          {erro && <p role="alert" className="campo-erro">{erro}</p>}
+
+          {carregando ? (
+            <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
+          ) : (
+            <>
+              {buscando && atividadesEncontradas.length > 0 && (
+                <section>
+                  <h2 className="section-label">Atividades</h2>
+                  <div className="lista">
+                    {atividadesEncontradas.map((a) => (
+                      <div key={a.id} className="item-atividade" onClick={() => navigate(`/projetos/atividade/${a.id}`)} role="button" tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/projetos/atividade/${a.id}`) } }}
+                        aria-label={`Abrir atividade ${a.nome}`}
+                      >
+                        <div className="item-atividade-titulo">{a.nome}</div>
+                        <div className="item-atividade-meta">
+                          <span>{mapaProjetos[a.projeto_id] || 'sem projeto'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {buscando && <h2 className="section-label" style={{ marginTop: atividadesEncontradas.length ? 'var(--space-md)' : 0 }}>Projetos</h2>}
+
+              {projetosOrdenados.length === 0 ? (
+                <p className="text-micro">
+                  {buscando ? 'Nenhum projeto encontrado.' : 'Nenhum projeto ainda. Crie o primeiro pra começar.'}
+                </p>
+              ) : (
+                <div className="lista">
+                  {projetosOrdenados.map((p) => {
+                    const atividadesDoProjeto = atividades.filter((a) => a.projeto_id === p.id)
+                    const tracao = precisaDeTracao(p, atividadesDoProjeto)
+                    const total = atividadesDoProjeto.length
+                    const entregues = atividadesDoProjeto.filter((a) => a.fase === 'entregue').length
+
+                    return (
+                      <div
+                        key={p.id}
+                        className="item-atividade"
+                        onClick={() => navigate(`/projetos/projeto/${p.id}`)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/projetos/projeto/${p.id}`) } }}
+                        aria-label={`Abrir projeto ${p.nome}`}
+                      >
+                        <div className="item-atividade-titulo" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {p.quente && <Flame size={14} color="var(--atencao)" aria-label="Quente" />}
+                          {p.nome}
+                        </div>
+                        <div className="item-atividade-meta">
+                          <span>{total === 0 ? 'sem atividades' : `${entregues}/${total} concluídas`}</span>
+                          {p.data_entrega && (
+                            <>
+                              <span className="separador-ponto">·</span>
+                              <span>entrega {new Date(p.data_entrega).toLocaleDateString('pt-BR')}</span>
+                            </>
+                          )}
+                          {tracao && (
+                            <>
+                              <span className="separador-ponto">·</span>
+                              <span className="texto-atencao" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <AlertTriangle size={12} />
+                                precisa de atenção
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        <label className="campo-busca">
-          <Search size={16} color="var(--text-dim)" />
-          <input
-            type="search"
-            placeholder="Buscar projeto ou atividade..."
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-          />
-          {busca && (
-            <button type="button" className="modal-fechar" onClick={() => setBusca('')} aria-label="Limpar busca">
-              <X size={14} />
-            </button>
-          )}
-        </label>
+        {modalNovo}
+        {isJarvis && <TabBar />}
+      </div>
+    )
+  }
 
-        {erro && <p role="alert" className="campo-erro">{erro}</p>}
+  // Espaço Jarvis — visual HUD Command Center.
+  return (
+    <div className="hud-aba-page">
+      <div className="hud-grid-bg" />
+      <div className="hud-scanlines" />
+      <div className="hud-scanline-beam" />
 
-        {carregando ? (
-          <p className="text-body" style={{ color: 'var(--text-dim)' }}>Carregando...</p>
-        ) : (
-          <>
-            {buscando && atividadesEncontradas.length > 0 && (
-              <section>
-                <h2 className="section-label">Atividades</h2>
-                <div className="lista">
-                  {atividadesEncontradas.map((a) => (
-                    <div key={a.id} className="item-atividade" onClick={() => navigate(`/projetos/atividade/${a.id}`)} role="button" tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/projetos/atividade/${a.id}`) } }}
-                      aria-label={`Abrir atividade ${a.nome}`}
-                    >
-                      <div className="item-atividade-titulo">{a.nome}</div>
-                      <div className="item-atividade-meta">
-                        <span>{mapaProjetos[a.projeto_id] || 'sem projeto'}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+      <div className="hud-aba-header">
+        <span className="hud-aba-title">◤ PROJETOS</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button type="button" className="hud-btn-nova" onClick={() => setMostrarNovo(true)}>+ NOVA</button>
+          <HudAbaControles onSair={sair} />
+        </div>
+      </div>
 
-            {buscando && <h2 className="section-label" style={{ marginTop: atividadesEncontradas.length ? 'var(--space-md)' : 0 }}>Projetos</h2>}
-
-            {projetosOrdenados.length === 0 ? (
-              <p className="text-micro">
-                {buscando ? 'Nenhum projeto encontrado.' : 'Nenhum projeto ainda. Crie o primeiro pra começar.'}
-              </p>
-            ) : (
-              <div className="lista">
-                {projetosOrdenados.map((p) => {
-                  const atividadesDoProjeto = atividades.filter((a) => a.projeto_id === p.id)
-                  const tracao = precisaDeTracao(p, atividadesDoProjeto)
-                  const total = atividadesDoProjeto.length
-                  const entregues = atividadesDoProjeto.filter((a) => a.fase === 'entregue').length
-
-                  return (
-                    <div
-                      key={p.id}
-                      className="item-atividade"
-                      onClick={() => navigate(`/projetos/projeto/${p.id}`)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/projetos/projeto/${p.id}`) } }}
-                      aria-label={`Abrir projeto ${p.nome}`}
-                    >
-                      <div className="item-atividade-titulo" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {p.quente && <Flame size={14} color="var(--atencao)" aria-label="Quente" />}
-                        {p.nome}
-                      </div>
-                      <div className="item-atividade-meta">
-                        <span>{total === 0 ? 'sem atividades' : `${entregues}/${total} concluídas`}</span>
-                        {p.data_entrega && (
-                          <>
-                            <span className="separador-ponto">·</span>
-                            <span>entrega {new Date(p.data_entrega).toLocaleDateString('pt-BR')}</span>
-                          </>
-                        )}
-                        {tracao && (
-                          <>
-                            <span className="separador-ponto">·</span>
-                            <span className="texto-atencao" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              <AlertTriangle size={12} />
-                              precisa de atenção
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </>
+      <div className="hud-input-row" style={{ maxWidth: 'none', margin: 0 }}>
+        <Search size={15} color="var(--hud-text-dim)" style={{ flexShrink: 0 }} />
+        <input
+          className="hud-input"
+          type="search"
+          placeholder="Buscar projeto ou atividade..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+        />
+        {busca && (
+          <button type="button" className="modal-fechar" onClick={() => setBusca('')} aria-label="Limpar busca">
+            <X size={14} />
+          </button>
         )}
       </div>
 
-      {mostrarNovo && (
-        <Modal titulo="Novo projeto" onFechar={() => setMostrarNovo(false)}>
-          <FormProjeto onSalvar={criarProjeto} onCancelar={() => setMostrarNovo(false)} />
-        </Modal>
+      {erro && <p role="alert" className="campo-erro">{erro}</p>}
+
+      {carregando ? (
+        <p className="hud-dim">Carregando...</p>
+      ) : (
+        <>
+          {buscando && atividadesEncontradas.length > 0 && (
+            <HudPanel label="ATIVIDADES">
+              <div className="hud-projetos-lista">
+                {atividadesEncontradas.map((a) => (
+                  <div key={a.id} className="hud-agenda-item" style={{ cursor: 'pointer' }} onClick={() => navigate(`/projetos/atividade/${a.id}`)} role="button" tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/projetos/atividade/${a.id}`) } }}
+                  >
+                    <span>{a.nome}</span>
+                    <span className="hud-proj-meta">{mapaProjetos[a.projeto_id] || 'sem projeto'}</span>
+                  </div>
+                ))}
+              </div>
+            </HudPanel>
+          )}
+
+          <div className="hud-projetos-lista">
+            {projetosOrdenados.length === 0 ? (
+              <span className="hud-dim">{buscando ? 'Nenhum projeto encontrado.' : 'Nenhum projeto ainda. Crie o primeiro pra começar.'}</span>
+            ) : (
+              projetosOrdenados.map((p) => {
+                const atividadesDoProjeto = atividades.filter((a) => a.projeto_id === p.id)
+                const tracao = precisaDeTracao(p, atividadesDoProjeto)
+                const total = atividadesDoProjeto.length
+                const entregues = atividadesDoProjeto.filter((a) => a.fase === 'entregue').length
+                const pct = total > 0 ? Math.round((entregues / total) * 100) : 0
+
+                return (
+                  <div
+                    key={p.id}
+                    className={`hud-panel hud-projeto-card ${tracao ? 'hud-projeto-card--parado' : ''}`}
+                    onClick={() => navigate(`/projetos/projeto/${p.id}`)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/projetos/projeto/${p.id}`) } }}
+                  >
+                    <div className="hud-proj-header">
+                      <span className="hud-proj-nome">
+                        {p.nome}
+                        {p.quente && <span className="hud-proj-quente">● QUENTE</span>}
+                      </span>
+                      <span className="hud-proj-atividades">{entregues}/{total}</span>
+                    </div>
+                    <div className="hud-progress-bg">
+                      <div className={`hud-progress-fill ${tracao ? 'hud-progress-fill--amber' : ''}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className={`hud-proj-meta ${tracao ? 'hud-proj-meta--amber' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {tracao ? <><AlertTriangle size={11} /> PRECISA DE ATENÇÃO</> : (p.fase || '').toUpperCase()}
+                      {p.data_entrega && (
+                        <span> · ENTREGA {new Date(p.data_entrega).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </>
       )}
 
-      {isJarvis && <TabBar />}
+      {modalNovo}
+      <HudTabBar />
     </div>
   )
 }

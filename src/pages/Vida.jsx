@@ -6,8 +6,9 @@ import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { useIdioma } from '../hooks/useIdioma'
 import { useTexto } from '../lib/i18n'
-import Header from '../components/Header'
-import TabBar from '../components/jarvis/TabBar'
+import HudPanel from '../components/hud/HudPanel'
+import HudAbaControles from '../components/hud/HudAbaControles'
+import HudTabBar from '../components/hud/HudTabBar'
 
 const DIAS = { pt: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'], en: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] }
 const VAZIO_EVENTO = { titulo: '', data: '', hora: '' }
@@ -93,7 +94,6 @@ export default function Vida() {
 
   if (!sessao) return <Navigate to="/" replace />
 
-  const isJarvis = sessao.espaco.jarvis_enabled === true
   const clientesPagantes = projetos.filter((p) => p.fase === 'operacao').length
 
   function marcado(habitoId, data) {
@@ -148,75 +148,42 @@ export default function Vida() {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: 'var(--space-md)', paddingBottom: isJarvis ? 76 : 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-      <Header espaco={sessao.espaco} onSair={sair} />
+    <div className="hud-aba-page">
+      <div className="hud-grid-bg" />
+      <div className="hud-scanlines" />
+      <div className="hud-scanline-beam" />
 
-      <h1 className="text-titulo">{t('sua_vida')}</h1>
+      <div className="hud-aba-header">
+        <span className="hud-aba-title">◤ {t('sua_vida').toUpperCase()}</span>
+        <HudAbaControles onSair={sair} />
+      </div>
 
       {erro && <p role="alert" className="campo-erro">{erro}</p>}
 
       {carregando ? (
-        <p className="text-body" style={{ color: 'var(--text-dim)' }}>{t('carregando')}</p>
+        <p className="hud-dim">{t('carregando')}</p>
       ) : (
-        <>
-          <div className="jarvis-kpi">
-            <span className="text-label">{t('clientes_pagantes')}</span>
-            <span className="jarvis-kpi-valor" data-zero={clientesPagantes === 0}>{clientesPagantes}</span>
-            <span className="text-micro">{t('ecossistemas_pilar')}</span>
-          </div>
-
-          {pilares.map((pilar) => {
-            const obsDoPilar = objetivos.filter((o) => o.pilar_id === pilar.id)
-            const projDoPilar = projetos.filter((p) => p.pilar_id === pilar.id)
-            const semCompromisso = pilar.id === 3 && !projDoPilar.some((p) => p.data_lancamento)
-
-            return (
-              <section key={pilar.id} className="detalhe-secao">
-                <div className="pilar-cabecalho">
-                  <span aria-hidden="true">{pilar.icone}</span>
-                  <span>{pilar.nome}</span>
-                  {semCompromisso && <span className="badge-sem-compromisso">{t('sem_compromisso')}</span>}
-                </div>
-
-                {obsDoPilar.length === 0 ? (
-                  <p className="text-micro">{t('nenhum_objetivo')}</p>
-                ) : (
-                  <div>
-                    {obsDoPilar.map((ob) => (
-                      <div key={ob.id} className="objetivo-linha" data-status={ob.status}>
-                        <span>{ob.descricao}</span>
-                        {ob.prazo && (
-                          <span className="text-micro">→ {new Date(ob.prazo).toLocaleDateString(localeData, { month: 'short', year: '2-digit' })}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )
-          })}
-
-          <section className="detalhe-secao">
-            <h2 className="section-label">{t('habitos_semana')}</h2>
-            <div className="semana-grade">
-              <span />
-              {DIAS[idioma].map((d) => <span key={d} className="semana-cabecalho">{d}</span>)}
-            </div>
+        <div className="hud-aba-grid">
+          <HudPanel label="HÁBITOS · SEMANA" className="hud-aba-panel">
             {habitos.length === 0 ? (
-              <p className="text-micro">{t('nenhum_habito')}</p>
+              <span className="hud-dim">{t('nenhum_habito')}</span>
             ) : (
-              habitos.map((h) => {
-                const totalSemana = semana.filter((data) => marcado(h.id, data)).length
-                return (
-                  <div key={h.id} className="semana-grade">
-                    <span className="text-body" style={{ fontSize: 14 }}>
-                      {h.nome} <span className="text-micro">{totalSemana}/{h.frequencia_semanal}</span>
+              <>
+                <div className="hud-semana-cabecalho">
+                  <span />
+                  {DIAS[idioma].map((d) => <span key={d}>{d}</span>)}
+                </div>
+                {habitos.map((h) => (
+                  <div key={h.id} className="hud-habito-linha">
+                    <span className="hud-habito-nome">
+                      {h.nome}
+                      <span className="hud-habito-freq">{semana.filter((data) => marcado(h.id, data)).length}/{h.frequencia_semanal}</span>
                     </span>
                     {semana.map((data) => (
                       <button
                         key={data}
                         type="button"
-                        className="habito-check"
+                        className="hud-habito-check"
                         data-marcado={marcado(h.id, data)}
                         onClick={() => alternarCheck(h.id, data)}
                         aria-label={`${h.nome} em ${data}`}
@@ -225,54 +192,78 @@ export default function Vida() {
                       </button>
                     ))}
                   </div>
-                )
-              })
+                ))}
+              </>
             )}
-          </section>
+          </HudPanel>
 
-          <section className="detalhe-secao">
-            <h2 className="section-label">{t('proximos_eventos')}</h2>
-            {eventos.length === 0 ? (
-              <p className="text-micro">{t('nenhum_evento')}</p>
-            ) : (
-              <div className="lista">
-                {eventos.map((e) => (
-                  <div key={e.id} className="item-atividade" style={{ cursor: 'default', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>
-                      <span className="text-micro" style={{ marginRight: 8 }}>
+          <HudPanel label="AGENDA" className="hud-aba-panel">
+            <div className="hud-agenda-lista">
+              {eventos.length === 0 ? (
+                <span className="hud-dim">{t('nenhum_evento')}</span>
+              ) : (
+                eventos.map((e) => (
+                  <div key={e.id} className="hud-agenda-item">
+                    <span className="hud-agenda-item-info">
+                      <span className="hud-agenda-data">
                         {new Date(e.inicio).toLocaleDateString(localeData, { day: '2-digit', month: '2-digit' })}
                         {!e.dia_todo && ` ${new Date(e.inicio).toLocaleTimeString(localeData, { hour: '2-digit', minute: '2-digit' })}`}
                       </span>
-                      {e.titulo}
+                      <span>{e.titulo}</span>
                     </span>
-                    <button type="button" className="link-acao" onClick={() => excluirEvento(e.id)} aria-label={`${t('excluir')} ${e.titulo}`}>
-                      <Trash2 size={14} />
+                    <button type="button" className="hud-agenda-del" onClick={() => excluirEvento(e.id)} aria-label={`${t('excluir')} ${e.titulo}`}>
+                      <Trash2 size={13} />
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
-
-            <div className="campo-grade-2" style={{ marginTop: 'var(--space-md)' }}>
-              <label className="campo">
-                <span className="text-label">{t('novo_evento')}</span>
-                <input value={novoEvento.titulo} onChange={(e) => setNovoEvento((p) => ({ ...p, titulo: e.target.value }))} placeholder={t('titulo_campo')} />
-              </label>
-              <label className="campo">
-                <span className="text-label">{t('data_campo')}</span>
-                <input type="date" value={novoEvento.data} onChange={(e) => setNovoEvento((p) => ({ ...p, data: e.target.value }))} />
-              </label>
+                ))
+              )}
             </div>
-            <div className="modal-rodape" style={{ marginTop: 0, justifyContent: 'flex-end' }}>
-              <button type="button" className="btn-primario" onClick={criarEvento} disabled={!novoEvento.titulo.trim() || !novoEvento.data || enviandoEvento}>
-                {enviandoEvento ? t('adicionando') : t('adicionar_evento')}
+            <div className="hud-agenda-form">
+              <input className="hud-input" value={novoEvento.titulo} onChange={(e) => setNovoEvento((p) => ({ ...p, titulo: e.target.value }))} placeholder={t('titulo_campo')} />
+              <input className="hud-input" type="date" value={novoEvento.data} onChange={(e) => setNovoEvento((p) => ({ ...p, data: e.target.value }))} />
+              <button type="button" className="hud-btn-nova" onClick={criarEvento} disabled={!novoEvento.titulo.trim() || !novoEvento.data || enviandoEvento}>
+                {enviandoEvento ? t('adicionando').toUpperCase() : `+ ${t('adicionar_evento').toUpperCase()}`}
               </button>
             </div>
-          </section>
-        </>
+          </HudPanel>
+
+          <HudPanel label="PILARES & OBJETIVOS" className="hud-aba-panel hud-aba-panel--full">
+            <div className="hud-vida-kpi">
+              <span className="hud-vida-kpi-label">{t('clientes_pagantes').toUpperCase()}</span>
+              <span className="hud-vida-kpi-valor" data-zero={clientesPagantes === 0}>{clientesPagantes}</span>
+              <span className="hud-habito-freq">{t('ecossistemas_pilar')}</span>
+            </div>
+
+            {pilares.map((pilar) => {
+              const obsDoPilar = objetivos.filter((o) => o.pilar_id === pilar.id)
+              const projDoPilar = projetos.filter((p) => p.pilar_id === pilar.id)
+              const semCompromisso = pilar.id === 3 && !projDoPilar.some((p) => p.data_lancamento)
+
+              return (
+                <div key={pilar.id} className="hud-pilar-bloco">
+                  <div className="hud-pilar-cabecalho">
+                    <span aria-hidden="true">{pilar.icone}</span>
+                    <span>{pilar.nome}</span>
+                    {semCompromisso && <span className="hud-badge-atencao">{t('sem_compromisso')}</span>}
+                  </div>
+                  {obsDoPilar.length === 0 ? (
+                    <span className="hud-dim">{t('nenhum_objetivo')}</span>
+                  ) : (
+                    obsDoPilar.map((ob) => (
+                      <div key={ob.id} className="hud-objetivo-linha" data-status={ob.status}>
+                        <span>{ob.descricao}</span>
+                        {ob.prazo && <span className="hud-objetivo-prazo">→ {new Date(ob.prazo).toLocaleDateString(localeData, { month: 'short', year: '2-digit' })}</span>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )
+            })}
+          </HudPanel>
+        </div>
       )}
 
-      {isJarvis && <TabBar />}
+      <HudTabBar />
     </div>
   )
 }

@@ -1318,6 +1318,20 @@ a.link-acao { text-decoration-line: underline; }
   font-family: var(--font-mono-hud);
   font-size: 10px; letter-spacing: 2px;
   color: var(--hud-text-dim); margin-bottom: 4px;
+  display: flex; align-items: center;
+}
+.fin-eye-btn {
+  background: none; border: none;
+  color: var(--hud-text-dim); cursor: pointer;
+  padding: 0 0 0 6px; vertical-align: middle;
+  opacity: 0.6; transition: opacity .15s;
+  display: inline-flex; align-items: center;
+}
+.fin-eye-btn:hover { opacity: 1; }
+.fin-kpi-sub {
+  font-family: var(--font-mono-hud);
+  font-size: 9px; letter-spacing: 1px;
+  color: var(--hud-amber); margin-top: 2px;
 }
 .fin-kpi-valor { font-family: var(--font-mono-hud); font-size: 22px; font-weight: 700; }
 .fin-kpi--cyan  { color: var(--hud-cyan-lt); text-shadow: 0 0 12px rgba(0,229,255,.4); }
@@ -1383,6 +1397,77 @@ a.link-acao { text-decoration-line: underline; }
 .vida-agenda { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(53,226,255,.12); }
 .vida-agenda-item { display: flex; gap: 10px; font-size: 13px; color: var(--hud-text-sec); }
 .vida-agenda-hora { font-family: var(--font-mono-hud); color: var(--hud-cyan-lt); font-size: 12px; flex-shrink: 0; width: 42px; }
+
+/* ---- Aba Vida — hábitos interativos, pilares/objetivos, agenda ---- */
+.hud-vida-kpi { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+.hud-vida-kpi-label { font-family: var(--font-mono-hud); font-size: 10px; letter-spacing: 2px; color: var(--hud-text-dim); }
+.hud-vida-kpi-valor { font-family: var(--font-mono-hud); font-size: 32px; font-weight: 700; color: var(--hud-cyan-lt); line-height: 1.1; }
+.hud-vida-kpi-valor[data-zero="true"] { color: var(--hud-amber); }
+
+.hud-semana-cabecalho { display: grid; grid-template-columns: 1fr repeat(7, 26px); gap: 6px; margin-bottom: 6px; }
+.hud-semana-cabecalho span { text-align: center; font-family: var(--font-mono-hud); font-size: 10px; color: var(--hud-text-dim); }
+.hud-habito-linha { display: grid; grid-template-columns: 1fr repeat(7, 26px); align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid rgba(53,226,255,.1); font-size: 13px; }
+.hud-habito-linha:last-child { border-bottom: none; }
+.hud-habito-nome { color: var(--hud-text-lt); }
+.hud-habito-freq { font-family: var(--font-mono-hud); font-size: 11px; color: var(--hud-text-dim); margin-left: 4px; }
+.hud-habito-check {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid rgba(53,226,255,.35);
+  background: none; margin: 0 auto; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--hud-cyan-lt); cursor: pointer;
+  font-size: 11px;
+}
+.hud-habito-check[data-marcado="true"] {
+  background: var(--hud-cyan);
+  border-color: var(--hud-cyan);
+  color: #03222e;
+  box-shadow: 0 0 8px rgba(0,229,255,.5);
+}
+
+.hud-pilar-bloco { margin-bottom: 18px; }
+.hud-pilar-bloco:last-child { margin-bottom: 0; }
+.hud-pilar-cabecalho { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--hud-text-lt); margin-bottom: 6px; }
+.hud-badge-atencao {
+  font-family: var(--font-mono-hud); font-size: 10px; letter-spacing: 1px;
+  color: var(--hud-amber); border: 1px solid var(--hud-amber-bd);
+  padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+}
+.hud-objetivo-linha { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--hud-text-sec); padding: 4px 0; }
+.hud-objetivo-linha[data-status="concluido"] { color: var(--hud-text-dim); text-decoration: line-through; }
+.hud-objetivo-prazo { font-family: var(--font-mono-hud); font-size: 11px; color: var(--hud-text-dim); flex-shrink: 0; }
+
+.hud-agenda-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.hud-agenda-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; color: var(--hud-text-sec); }
+.hud-agenda-item-info { display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.hud-agenda-data { font-family: var(--font-mono-hud); font-size: 11px; color: var(--hud-cyan-lt); flex-shrink: 0; }
+.hud-agenda-del { background: none; border: none; color: var(--hud-text-dim); cursor: pointer; padding: 2px; flex-shrink: 0; }
+.hud-agenda-del:hover { color: var(--hud-red-lt); }
+.hud-agenda-form { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid rgba(53,226,255,.12); }
+.hud-agenda-form .hud-input { min-width: 140px; flex: 1; padding: 8px 12px; font-size: 13px; }
+
+/* ---- Aba Financeiro ---- */
+.hud-fin-kpis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.hud-cat-linha { margin-bottom: 12px; }
+.hud-cat-linha:last-child { margin-bottom: 0; }
+.hud-cat-topo { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+.hud-cat-nome { color: var(--hud-text-lt); }
+.hud-cat-valor { font-family: var(--font-mono-hud); font-size: 12px; color: var(--hud-text-dim); }
+.hud-cat-valor--alerta { color: var(--hud-amber); }
+.hud-extrato-lista { display: flex; flex-direction: column; gap: 9px; }
+.hud-divida-item { display: flex; justify-content: space-between; font-size: 13px; padding: 8px 0; border-bottom: 1px solid rgba(255,183,77,.15); }
+.hud-divida-item:last-child { border-bottom: none; }
+.hud-divida-nome { color: var(--hud-amber-lt); }
+.hud-divida-valor { font-family: var(--font-mono-hud); font-size: 12px; color: var(--hud-text-sec); }
+.hud-lanc-form { display: flex; flex-direction: column; gap: 10px; }
+.hud-lanc-form-linha { display: flex; gap: 8px; flex-wrap: wrap; }
+.hud-lanc-form-linha .hud-input,
+.hud-lanc-form-linha select { min-width: 120px; flex: 1; padding: 8px 12px; font-size: 13px; }
+.hud-lanc-form select {
+  background: rgba(2,25,38,.7); border: 1px solid rgba(53,226,255,.35);
+  color: var(--hud-text-lt); font-family: var(--font-hud); font-size: 13px;
+  padding: 8px 12px; outline: none;
+}
 
 /* ---- Briefing ---- */
 .hud-briefing-eventos { display: flex; flex-direction: column; gap: 10px; font-size: 15px; }
@@ -1481,9 +1566,14 @@ a.link-acao { text-decoration-line: underline; }
 .hud-historico-vazio { padding: 16px; font-size: 13px; color: var(--hud-text-dim); }
 
 /* ---- Root / fundo ---- */
+/* position:fixed + inset:0 trava exatamente na viewport real,
+   independente do body — mesma causa/fix do bug de scroll da página
+   inteira já resolvido antes no chat antigo (.jarvis-chat-layout).
+   min-height:100dvh aqui deixava o container crescer com o conteúdo
+   em vez de cortar, e a sobra virava scroll da página toda em retrato. */
 .hud-root {
-  position: relative;
-  min-height: 100dvh;
+  position: fixed;
+  inset: 0;
   background: var(--hud-bg-radial);
   font-family: var(--font-hud);
   color: var(--hud-text);
@@ -1648,11 +1738,97 @@ a.link-acao { text-decoration-line: underline; }
 .hud-send-btn:hover   { background: rgba(53,226,255,.3); }
 .hud-send-btn:disabled { opacity: .4; cursor: not-allowed; }
 
+.hud-mic-btn, .hud-send-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+.hud-mic-btn svg, .hud-send-btn svg { display: block; flex-shrink: 0; }
+
 /* ---- Tab bar mobile ---- */
 .hud-tabbar { display: none; }
 
-/* ── MOBILE ── */
-@media (max-width: 768px) {
+/* ---- Briefing compacto (só mobile — ver media query abaixo) ---- */
+.hud-briefing-mobile { display: none; }
+.hud-briefing-mobile-clima { color: var(--hud-text-dim); letter-spacing: 1px; }
+.hud-briefing-mobile-evento { display: flex; gap: 8px; color: var(--hud-text-sec); }
+.hud-briefing-mobile-hora { color: var(--hud-cyan-lt); }
+
+/* ---- Abas HUD (Vida/Projetos/Financeiro) ---- */
+.hud-aba-page {
+  position: fixed; inset: 0;
+  overflow-y: auto;
+  background: var(--hud-bg-radial);
+  font-family: var(--font-hud);
+  color: var(--hud-text);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 24px;
+  padding-top: calc(18px + env(safe-area-inset-top));
+  gap: 14px;
+}
+.hud-aba-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid rgba(53,226,255,.2);
+  flex-shrink: 0;
+}
+.hud-aba-title {
+  font-family: var(--font-mono-hud);
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--hud-cyan);
+}
+.hud-aba-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+.hud-aba-panel--full { grid-column: 1 / -1; }
+
+.hud-projetos-lista { display: flex; flex-direction: column; gap: 12px; }
+.hud-projeto-card { cursor: pointer; transition: border-color .15s; }
+.hud-projeto-card:hover { border-color: rgba(53,226,255,.5); }
+.hud-projeto-card--parado { border-color: var(--hud-amber-bd) !important; }
+.hud-projeto-card--parado::before,
+.hud-projeto-card--parado::after { border-color: var(--hud-amber) !important; }
+.hud-proj-header { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; margin-bottom: 8px; }
+.hud-proj-nome { font-weight: 600; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hud-proj-quente { color: var(--hud-amber); font-size: 11px; font-family: var(--font-mono-hud); }
+.hud-proj-atividades { font-family: var(--font-mono-hud); color: var(--hud-cyan-lt); font-size: 12px; flex-shrink: 0; }
+.hud-proj-meta { font-family: var(--font-mono-hud); font-size: 10px; letter-spacing: 1px; color: var(--hud-text-dim); margin-top: 6px; }
+.hud-proj-meta--amber { color: var(--hud-amber); animation: blink 2s infinite; }
+
+.hud-fin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.hud-btn-nova {
+  background: rgba(53,226,255,.1);
+  border: 1px solid rgba(53,226,255,.4);
+  color: var(--hud-cyan-lt);
+  font-family: var(--font-mono-hud);
+  font-size: 11px; letter-spacing: 2px;
+  padding: 6px 12px; cursor: pointer;
+  transition: background .15s;
+}
+.hud-btn-nova:hover { background: rgba(53,226,255,.2); }
+.hud-mes-seletor { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono-hud); font-size: 12px; }
+.hud-mes-btn { background: none; border: none; color: var(--hud-cyan); cursor: pointer; font-size: 16px; padding: 2px 6px; }
+.hud-mes-btn:disabled { color: var(--hud-text-dim); cursor: default; }
+.hud-mes-txt { color: var(--hud-text-lt); letter-spacing: 2px; }
+
+/* Desktop — 3 colunas só a partir daqui; reforça a regra base
+   (já vale por padrão) contra qualquer herança inesperada. */
+@media (min-width: 1024px) {
+  .hud-main { grid-template-columns: 370px 1fr 370px; }
+  .hud-col--left, .hud-col--right { display: flex; }
+}
+
+/* ── MOBILE/TABLET — abaixo de 1024px vira 1 coluna + navegação por
+   abas. Girar pra paisagem acima de 1024px volta pro layout desktop. ── */
+@media (max-width: 1023px) {
   .hud-topbar-wrapper { display: none; }
   .hud-grid-bg, .hud-scanlines, .hud-scanline-beam { display: none; }
 
@@ -1661,16 +1837,28 @@ a.link-acao { text-decoration-line: underline; }
     grid-template-rows: 1fr;
     padding: 0;
     gap: 0;
-    overflow: visible;
   }
 
   .hud-col--left,
   .hud-col--right { display: none; }
 
   .hud-col--center {
-    height: calc(100dvh - 72px);
+    height: calc(100dvh - 72px - env(safe-area-inset-bottom));
     padding: 0 12px;
     padding-bottom: 8px;
+  }
+
+  .hud-chat { -webkit-overflow-scrolling: touch; }
+
+  .hud-briefing-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 4px;
+    border-bottom: 1px solid rgba(53,226,255,.12);
+    font-family: var(--font-mono-hud);
+    font-size: 11px;
+    flex-shrink: 0;
   }
 
   .orbe-container { width: 120px !important; height: 120px !important; }
@@ -1703,4 +1891,11 @@ a.link-acao { text-decoration-line: underline; }
     transition: color .15s;
   }
   .hud-tab-btn--ativo { color: var(--hud-cyan); }
+
+  .hud-aba-page {
+    padding: 16px;
+    padding-top: calc(16px + env(safe-area-inset-top));
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+  .hud-fin-grid { grid-template-columns: 1fr; }
 }

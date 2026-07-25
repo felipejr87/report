@@ -248,10 +248,16 @@ serve(async (req) => {
       supabase.from('jarvis_perguntas_pendentes').select('id, campo, pergunta, contexto').eq('espaco_id', espacoId).eq('respondida', false).order('prioridade', { ascending: true }).limit(1).maybeSingle(),
     ])
 
-    const lancCorrente = (lancamentos || []).filter((l) => l.conta !== 'cartao')
-    const lancCartao = (lancamentos || []).filter((l) => l.conta === 'cartao')
-    const saldoCorrente = lancCorrente.reduce((s, l) => s + l.valor, 0)
-    const faturaCartao = lancCartao.filter((l) => l.valor < 0).reduce((s, l) => s + Math.abs(l.valor), 0)
+    // Saldo real da conta e fatura aberta NÃO vêm da soma dos
+    // lançamentos — essa soma não reflete o saldo real (diagnóstico do
+    // Axis: dava -R$1.678,98 contra o real -R$879,27 do extrato Itaú).
+    // Fonte é jarvis_perfil.preferencias, atualizado manualmente com o
+    // dado real do banco.
+    const prefsFinanceiras = perfil?.preferencias || {}
+    const saldoContaReal: number | null = typeof prefsFinanceiras.saldo_conta_corrente === 'number' ? prefsFinanceiras.saldo_conta_corrente : null
+    const faturaAbertaReal: number | null = typeof prefsFinanceiras.fatura_aberta === 'number' ? prefsFinanceiras.fatura_aberta : null
+    const faturaVencReal: string | null = prefsFinanceiras.fatura_vencimento || null
+    const limiteCartaoReal: number | null = typeof prefsFinanceiras.limite_cartao === 'number' ? prefsFinanceiras.limite_cartao : null
 
     const gastoPorCat: Record<number, number> = {}
     let semCategoria = 0
@@ -269,7 +275,11 @@ serve(async (req) => {
     if (perfil?.escola_filha) perfilPartes.push(`escola: ${perfil.escola_filha}`)
     if (perfil?.rotina && Object.keys(perfil.rotina).length > 0) perfilPartes.push(`rotina: ${JSON.stringify(perfil.rotina)}`)
     if (perfil?.saude && Object.keys(perfil.saude).length > 0) perfilPartes.push(`saúde: ${JSON.stringify(perfil.saude)}`)
-    if (perfil?.preferencias && Object.keys(perfil.preferencias).length > 0) perfilPartes.push(`preferências: ${JSON.stringify(perfil.preferencias)}`)
+    {
+      // saldo/fatura já entram na seção SALDOS REAIS abaixo — não duplicar aqui.
+      const { saldo_conta_corrente: _sc, saldo_data: _sd, fatura_aberta: _fa, fatura_vencimento: _fv, limite_cartao: _lc, ...outrasPreferencias } = perfil?.preferencias || {}
+      if (Object.keys(outrasPreferencias).length > 0) perfilPartes.push(`preferências: ${JSON.stringify(outrasPreferencias)}`)
+    }
     if (perfil?.contatos_chave?.length > 0) perfilPartes.push(`contatos: ${JSON.stringify(perfil.contatos_chave)}`)
     const perfilCompleto = perfilPartes.length > 0 ? perfilPartes.join(' | ') : 'Não preenchido ainda.'
 
@@ -304,9 +314,13 @@ AGORA: ${agoraBRT.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit',
 PRÓXIMO EVENTO: ${proximoEvento ? `${proximoEvento.titulo} — ${new Date(proximoEvento.inicio).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : 'Nenhum'}
 ATIVIDADES COM PRAZO PRÓXIMO: ${urgentes?.map((a) => `${a.nome} (vence ${a.data_fim})`).join('; ') || 'Nenhuma'}
 
-FINANCEIRO ${mes} (por conta — categoria é só resumo, nunca obrigatória):
-- Conta corrente: saldo R$${saldoCorrente.toFixed(2)}
-- Cartão de crédito: fatura do mês R$${faturaCartao.toFixed(2)}
+SALDOS REAIS (fonte: extrato, não soma de lançamentos — sempre use estes números,
+nunca calcule saldo a partir de LANÇAMENTOS abaixo):
+- Conta corrente: ${saldoContaReal != null ? `R$${saldoContaReal.toFixed(2)}${saldoContaReal < 0 ? ' (negativo — juros ativos)' : ''}` : 'não informado ainda'}
+- Fatura aberta do cartão: ${faturaAbertaReal != null ? `R$${faturaAbertaReal.toFixed(2)}` : 'não informado ainda'}${faturaVencReal ? ` (vence ${new Date(faturaVencReal + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })})` : ''}
+${limiteCartaoReal != null ? `- Limite do cartão: R$${limiteCartaoReal.toFixed(2)}` : ''}
+
+FINANCEIRO ${mes} (lançamentos do mês — só pra categorias/tetos, NUNCA pra saldo):
 ${lancamentos?.length === 0 ? '- Nenhum lançamento registrado ainda.' : ''}
 ${categorias?.filter((c) => c.teto_mensal).map((c) => {
   const g = gastoPorCat[c.id] || 0
@@ -396,11 +410,18 @@ OS 6 PILARES DA SUA VIDA — PRIORIDADE ABSOLUTA, NESTA ORDEM
    Momento atual: recuperação de caixa. Evitar dívidas novas com juros.
 
    Como falar de finanças quando perguntado (nunca por conta própria — ver
-   regra 2 abaixo): use SEMPRE os números de FINANCEIRO/DÍVIDAS no contexto
-   em tempo real, nunca estime. Se a conta corrente estiver negativa, aponte
-   isso primeiro e — se a fatura do cartão for claramente maior que o
-   restante dos gastos fixos — trate o cartão como o gargalo mais provável.
-   Feche com uma recomendação concreta e pequena, não um sermão.
+   regra 2 abaixo): use SEMPRE os números de SALDOS REAIS/DÍVIDAS no contexto
+   em tempo real, nunca estime nem calcule a partir de LANÇAMENTOS (isso é só
+   pra categorias/tetos do mês, não pra saldo de conta). Se a conta corrente
+   estiver negativa, aponte isso primeiro e — se a fatura do cartão for
+   claramente maior que o restante dos gastos fixos — trate o cartão como o
+   gargalo mais provável. Feche com uma recomendação concreta e pequena, não
+   um sermão.
+
+   Resposta direta quando perguntado especificamente por saldo/fatura — sem
+   rodeio, sem contexto extra a menos que ele peça:
+   "Quanto tenho na conta?" → "Conta corrente: -R$ 879,27. Negativo."
+   "Qual minha fatura?" → "Fatura aberta: R$ 9.460,18. Vence 06 de agosto."
 
 5. CORPO & MENTE
    Treino: Full Body A/B alternado, 3-4x/semana.
@@ -777,12 +798,14 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
       const mes = new Date().toISOString().slice(0, 7)
       switch (input.tipo) {
         case 'financeiro_mes': {
-          const { data: lncs } = await supabase.from('lancamentos').select('valor, conta').eq('espaco_id', espacoId).gte('data', `${mes}-01`)
-          const correnteN = lncs?.filter((l: any) => l.conta !== 'cartao') || []
-          const cartaoN = lncs?.filter((l: any) => l.conta === 'cartao') || []
-          const saldoN = correnteN.reduce((s: number, l: any) => s + l.valor, 0)
-          const faturaN = cartaoN.filter((l: any) => l.valor < 0).reduce((s: number, l: any) => s + Math.abs(l.valor), 0)
-          return `${mes}: conta corrente R$${saldoN.toFixed(2)}, fatura cartão R$${faturaN.toFixed(2)}.`
+          // Saldo/fatura vêm de jarvis_perfil.preferencias (dado real do
+          // extrato) — nunca da soma de lançamentos, que não reflete o
+          // saldo real da conta.
+          const { data: perfilFin } = await supabase.from('jarvis_perfil').select('preferencias').eq('espaco_id', espacoId).maybeSingle()
+          const prefsFin = perfilFin?.preferencias || {}
+          const saldoTxt = typeof prefsFin.saldo_conta_corrente === 'number' ? `R$${prefsFin.saldo_conta_corrente.toFixed(2)}` : 'não informado'
+          const faturaTxt = typeof prefsFin.fatura_aberta === 'number' ? `R$${prefsFin.fatura_aberta.toFixed(2)}` : 'não informado'
+          return `${mes}: conta corrente ${saldoTxt}, fatura aberta do cartão ${faturaTxt}${prefsFin.fatura_vencimento ? ` (vence ${prefsFin.fatura_vencimento})` : ''}.`
         }
         case 'dividas': {
           const { data: divs } = await supabase.from('dividas').select('nome, saldo_atual, parcela').eq('espaco_id', espacoId).eq('ativa', true)

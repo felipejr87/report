@@ -21,7 +21,10 @@ export default function Header({ espaco, onSair }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-          <UsuarioBadge />
+          {/* Espaço Jarvis é sempre o Felipe — não pede nome. Atribuição
+              por nome digitado só faz sentido em espaços com múltiplas
+              pessoas de verdade (o rastreador genérico compartilhado). */}
+          {!isJarvis && <UsuarioBadge />}
           {isJarvis && <IdiomaToggle />}
           {isJarvis && (
             <Link to="/seguranca" className="modal-fechar" title="Segurança & Privacidade" aria-label="Segurança & Privacidade">

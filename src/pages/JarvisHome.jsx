@@ -594,6 +594,32 @@ export default function JarvisHome() {
           <div className="hud-col hud-col--center">
             <Orbe status={orbeStatus} size={230} idioma={idioma} />
 
+            {/* Briefing compacto — só visível no mobile (colunas
+                esquerda/direita somem abaixo de 1024px, então o
+                briefing completo vai junto; isso cobre o vazio). */}
+            <div className="hud-briefing-mobile">
+              {briefing?.tempo && (
+                <div className="hud-briefing-mobile-clima">
+                  {briefing.tempo.temp}°C · {briefing.tempo.descricao}
+                  {briefing.tempo.probChuva > 40 && ` · CHUVA ${briefing.tempo.probChuva}%`}
+                </div>
+              )}
+              {briefing?.eventosHoje?.[0] && (
+                <div className="hud-briefing-mobile-evento">
+                  <span className="hud-briefing-mobile-hora">
+                    {new Date(briefing.eventosHoje[0].inicio).toLocaleTimeString(localeData, { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {briefing.eventosHoje[0].titulo}
+                </div>
+              )}
+              {briefing?.urgentes?.[0] && (
+                <div style={{ color: 'var(--hud-amber)', fontSize: 10 }}>
+                  <Flag size={10} style={{ verticalAlign: -1, marginRight: 4 }} />
+                  {briefing.urgentes[0].nome}
+                </div>
+              )}
+            </div>
+
             <div className="hud-chat-controles">
               <button type="button" className="hud-ctrl-btn" onClick={() => setMostrarHistorico((v) => !v)}>
                 <History size={13} /> {t('historico')}
@@ -742,7 +768,7 @@ export default function JarvisHome() {
             </HudPanel>
 
             <HudPanel className="hud-financeiro-panel">
-              <PainelFinanceiro cliente={cliente} idioma={idioma} />
+              <PainelFinanceiro cliente={cliente} espacoId={sessao.espaco.id} idioma={idioma} />
             </HudPanel>
           </div>
         </div>
