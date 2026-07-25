@@ -6,6 +6,7 @@ import { useToast } from '../hooks/useToast'
 import { useIdioma } from '../hooks/useIdioma'
 import { useTexto } from '../lib/i18n'
 import { supabaseEspaco, urlFuncao } from '../lib/supabase'
+import { horaAtualBRT, diaSemanaAtualBRT, formatarHoraBRT } from '../lib/tempo'
 import { useVoz } from '../hooks/useVoz'
 import { useJarvisVoz } from '../hooks/useJarvisVoz'
 import BootSequence from '../components/hud/BootSequence'
@@ -110,7 +111,7 @@ function periodoDe(saudacao) {
 }
 
 function horaEvento(iso) {
-  return new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+  return formatarHoraBRT(iso)
 }
 
 // Fragmentos de texto do digest, por idioma — usados só dentro de
@@ -166,7 +167,7 @@ const TEXTO_SUGESTAO = {
 function montarSaudacao(dados, idioma) {
   const lang = idioma === 'en' ? 'en' : 'pt'
   const s = TEXTO_SAUDACAO[lang]
-  const agoraFallback = new Date().getHours()
+  const agoraFallback = horaAtualBRT()
 
   if (!dados) {
     const periodoFallback = agoraFallback < 12 ? 'manha' : agoraFallback < 18 ? 'tarde' : 'noite'
@@ -174,7 +175,7 @@ function montarSaudacao(dados, idioma) {
   }
 
   const periodo = periodoDe(dados.saudacao)
-  const dia = new Date().toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { weekday: 'long' })
+  const dia = diaSemanaAtualBRT(lang)
   const diaCap = dia.charAt(0).toUpperCase() + dia.slice(1)
   const linhas = [`${SAUDACAO_PALAVRA[lang][periodo]}, Felipe. ${diaCap}, ${dados.hora}.`]
 

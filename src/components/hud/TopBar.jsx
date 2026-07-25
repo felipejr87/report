@@ -14,8 +14,8 @@ export default function TopBar({ briefing, codigo = 'FE01', idioma = 'pt', onSai
   useEffect(() => {
     function tick() {
       const now = new Date()
-      setHora(now.toLocaleTimeString('pt-BR', { hour12: false }))
-      setData(now.toLocaleDateString(localeData, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase())
+      setHora(now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false }))
+      setData(now.toLocaleDateString(localeData, { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase())
     }
     tick()
     const id = setInterval(tick, 1000)

@@ -8,6 +8,40 @@ const TIMEOUT_SILENCIO_MS = 8000
 // Teto absoluto de uma captura — iOS Safari corta conexões longas.
 const TIMEOUT_MAX_MS = 30000
 
+// AudioContext singleton — alguns browsers suspendem o AudioContext
+// ao exibir prompts do sistema (ex: permissão de notificação), e o
+// SpeechRecognition às vezes compartilha esse pipeline de áudio por
+// baixo: mic "abre" (escutando=true) mas nenhum resultado chega.
+// Resumir antes de cada captura é defensivo e barato — não faz mal se
+// não for a causa real.
+let _audioCtx = null
+export function getAudioContext() {
+  if (typeof window === 'undefined') return null
+  const Ctx = window.AudioContext || window.webkitAudioContext
+  if (!Ctx) return null
+  if (!_audioCtx || _audioCtx.state === 'closed') _audioCtx = new Ctx()
+  return _audioCtx
+}
+export async function resumirAudioContext() {
+  const ctx = getAudioContext()
+  if (ctx && ctx.state === 'suspended') {
+    try { await ctx.resume() } catch { /* melhor esforço */ }
+  }
+  return ctx
+}
+
+// Alternativa de maior confiança dentro de um SpeechRecognitionResult
+// (maxAlternatives > 1) — o browser às vezes acerta a 2ª/3ª opção.
+function melhorAlternativa(resultado) {
+  let melhor = resultado[0].transcript
+  let melhorConfianca = resultado[0].confidence || 0
+  for (let i = 1; i < resultado.length; i++) {
+    const conf = resultado[i].confidence || 0
+    if (conf > melhorConfianca) { melhorConfianca = conf; melhor = resultado[i].transcript }
+  }
+  return melhor
+}
+
 export function useVoz({ onTranscricao, onInterim, onErro, idioma = 'pt' }) {
   const reconhecimentoRef = useRef(null)
   const timeoutSilencioRef = useRef(null)
@@ -46,7 +80,7 @@ export function useVoz({ onTranscricao, onInterim, onErro, idioma = 'pt' }) {
     if (texto) onTranscricao?.(texto)
   }
 
-  function iniciarEscuta() {
+  async function iniciarEscuta() {
     if (!suportado) {
       onErro?.(ERRO_SEM_SUPORTE[idioma] || ERRO_SEM_SUPORTE.pt)
       return
@@ -61,13 +95,21 @@ export function useVoz({ onTranscricao, onInterim, onErro, idioma = 'pt' }) {
     }
     limparTimeouts()
 
+    // Ver comentário no topo do arquivo — defensivo contra o
+    // AudioContext ficar suspended depois de prompts do sistema
+    // (ex: permissão de notificação) e o mic "abrir" sem captar nada.
+    await resumirAudioContext()
+
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     const rec = new SR()
     // Butler britânico — en-GB no reconhecimento também, mais consistente
     // com a persona quando o idioma ativo é inglês.
     rec.lang = idioma === 'en' ? 'en-GB' : 'pt-BR'
     rec.interimResults = true
-    rec.maxAlternatives = 1
+    // >1 alternativa e escolher a de maior confiança ajuda um pouco a
+    // precisão — não resolve a limitação do modelo nativo do browser,
+    // só reduz o pior caso.
+    rec.maxAlternatives = 3
 
     textoRef.current = ''
     ativoRef.current = true
@@ -77,7 +119,7 @@ export function useVoz({ onTranscricao, onInterim, onErro, idioma = 'pt' }) {
       let texto = ''
       let final = false
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        texto += e.results[i][0].transcript
+        texto += melhorAlternativa(e.results[i])
         if (e.results[i].isFinal) final = true
       }
       textoRef.current = texto

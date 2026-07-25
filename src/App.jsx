@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Entrada from './pages/Entrada'
 import Projetos from './pages/Projetos'
@@ -9,8 +10,27 @@ import JarvisHome from './pages/JarvisHome'
 import Vida from './pages/Vida'
 import Seguranca from './pages/Seguranca'
 import JarvisRoute from './components/JarvisRoute'
+import { getAudioContext } from './hooks/useVoz'
 
 export default function App() {
+  // Desbloqueia o AudioContext (singleton usado por useVoz) no primeiro
+  // gesto do usuário — alguns browsers criam/suspendem esse contexto de
+  // forma que só um gesto real destrava, útil como rede de segurança
+  // além do resume() que já roda a cada iniciarEscuta().
+  useEffect(() => {
+    function desbloquear() {
+      getAudioContext()?.resume().catch(() => {})
+    }
+    document.addEventListener('touchstart', desbloquear, { once: true, passive: true })
+    document.addEventListener('click', desbloquear, { once: true })
+    document.addEventListener('keydown', desbloquear, { once: true })
+    return () => {
+      document.removeEventListener('touchstart', desbloquear)
+      document.removeEventListener('click', desbloquear)
+      document.removeEventListener('keydown', desbloquear)
+    }
+  }, [])
+
   return (
     <Routes>
       <Route path="/" element={<Entrada />} />

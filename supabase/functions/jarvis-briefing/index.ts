@@ -63,8 +63,12 @@ serve(async (req) => {
     }
 
     const hoje = new Date()
-    const hojeStr = hoje.toISOString().split('T')[0]
-    const amanha = new Date(hoje.getTime() + 86400000).toISOString().split('T')[0]
+    // hoje.toISOString() é UTC — entre ~21h e 23h59 em Brasília (UTC-3)
+    // isso já reporta o dia seguinte, o que fazia "eventos de hoje" e a
+    // janela da semana dos hábitos pegarem o dia/semana errados nesse
+    // intervalo. hojeStr precisa ser a data civil em BRT, não em UTC.
+    const hojeStr = hoje.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+    const amanha = new Date(new Date(hojeStr + 'T12:00:00Z').getTime() + 86400000).toISOString().split('T')[0]
     const hora = hoje.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
     const diaSemana = hoje.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long' })
 
@@ -120,17 +124,24 @@ serve(async (req) => {
     const { data: habitos } = await supabase
       .from('habitos').select('id, nome, frequencia_semanal').eq('espaco_id', espacoId).eq('ativo', true)
 
-    const inicioSemana = new Date()
-    inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay())
+    // Mesmo cuidado de fuso: dia da semana e início da semana calculados
+    // a partir da data civil em BRT (hojeStr), não de Date.getDay()/
+    // setDate() do runtime (UTC no Deno).
+    const diaSemanaNum = new Date(hojeStr + 'T12:00:00Z').getUTCDay()
+    const inicioSemanaStr = new Date(new Date(hojeStr + 'T12:00:00Z').getTime() - diaSemanaNum * 86400000).toISOString().split('T')[0]
     const { data: checks } = await supabase
-      .from('habito_checks').select('habito_id, data').gte('data', inicioSemana.toISOString().split('T')[0])
+      .from('habito_checks').select('habito_id, data').gte('data', inicioSemanaStr)
 
     const checksPorHabito: Record<string, number> = {}
     checks?.forEach((c) => { checksPorHabito[c.habito_id] = (checksPorHabito[c.habito_id] || 0) + 1 })
     const habitosPendentes = habitos?.filter((h) => (checksPorHabito[h.id] || 0) < h.frequencia_semanal) || []
 
+    // hoje.getHours() usa o fuso do runtime (Deno roda em UTC) — às 15h
+    // em Brasília isso já é 18h+ UTC, o que fazia "Boa noite" aparecer
+    // de tarde. hora/diaSemana acima já passam timeZone explícito;
+    // faltava aqui.
     const saudacao = (() => {
-      const h = hoje.getHours()
+      const h = parseInt(hoje.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }), 10)
       if (h < 12) return 'Bom dia'
       if (h < 18) return 'Boa tarde'
       return 'Boa noite'
