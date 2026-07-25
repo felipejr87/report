@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom'
-import { Mic, Square, ArrowUp, History, Plus, X, Volume2, Volume1, VolumeX, Zap, Check, Umbrella, Bell, BellOff, Loader2, Wallet, Dumbbell, Flag, ArrowRight } from 'lucide-react'
+import { Mic, Square, ArrowUp, History, Plus, X, Check, Zap, Volume2, Volume1, VolumeX, Bell, BellOff, Loader2, Wallet, Dumbbell, Flag, ArrowRight } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../hooks/useToast'
 import { useIdioma } from '../hooks/useIdioma'
@@ -8,9 +8,14 @@ import { useTexto } from '../lib/i18n'
 import { supabaseEspaco, urlFuncao } from '../lib/supabase'
 import { useVoz } from '../hooks/useVoz'
 import { useJarvisVoz } from '../hooks/useJarvisVoz'
-import Header from '../components/Header'
-import TabBar from '../components/jarvis/TabBar'
-import IndicadorFala from '../components/jarvis/IndicadorFala'
+import BootSequence from '../components/hud/BootSequence'
+import TopBar from '../components/hud/TopBar'
+import Orbe from '../components/hud/Orbe'
+import HudPanel from '../components/hud/HudPanel'
+import PainelFinanceiro from '../components/hud/PainelFinanceiro'
+import PainelProjetos from '../components/hud/PainelProjetos'
+import VidaHabitos from '../components/hud/VidaHabitos'
+import HudTabBar from '../components/hud/HudTabBar'
 
 const CHAVE_VOZ_AUTO = 'jarvis_voz_auto'
 
@@ -141,7 +146,7 @@ const TEXTO_SAUDACAO = {
 }
 
 // Textos dos cards de sugestão proativa — assim como TEXTO_SAUDACAO,
-// ficam colados aqui por serem usados só dentro de gerarSugestoes.
+// ficam colados aqui por serem usados só dentro de carregarSugestoes.
 const TEXTO_SUGESTAO = {
   pt: {
     semLancamentos: 'Nenhum lançamento essa semana — vale registrar os gastos.',
@@ -208,7 +213,6 @@ export default function JarvisHome() {
   const toast = useToast()
   const { idioma } = useIdioma()
   const t = useTexto()
-  const localeData = idioma === 'en' ? 'en-US' : 'pt-BR'
   const [conversas, setConversas] = useState([])
   const [conversaId, setConversaId] = useState(null)
   const [mensagens, setMensagens] = useState([])
@@ -223,12 +227,37 @@ export default function JarvisHome() {
   const [sugestoes, setSugestoes] = useState([])
   const [notifAtivo, setNotifAtivo] = useState(false)
   const [notifCarregando, setNotifCarregando] = useState(false)
+  const [bootDone, setBootDone] = useState(() => !!sessionStorage.getItem('jarvis_boot_done'))
   const rodapeRef = useRef(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const msgInicialEnviada = useRef(false)
   const navegar = useNavigate()
 
   const { falar, pararFala, falando, carregandoAudio, suportado: falaSuportada, desbloquear } = useJarvisVoz(sessao.token, idioma)
+
+  // Efeito typewriter nas respostas do Jarvis — só na última mensagem
+  // do assistente, enquanto twAtivo estiver true.
+  const [twTexto, setTwTexto] = useState('')
+  const [twAtivo, setTwAtivo] = useState(false)
+  const twTimerRef = useRef(null)
+
+  function iniciarTypewriter(texto) {
+    clearInterval(twTimerRef.current)
+    setTwAtivo(true)
+    setTwTexto('')
+    let i = 0
+    twTimerRef.current = setInterval(() => {
+      i += 3
+      if (i >= texto.length) {
+        setTwTexto(texto)
+        setTwAtivo(false)
+        clearInterval(twTimerRef.current)
+      } else {
+        setTwTexto(texto.slice(0, i))
+      }
+    }, 24)
+  }
+  useEffect(() => () => clearInterval(twTimerRef.current), [])
 
   function toggleVozAutomatica() {
     const novo = !vozAutomatica
@@ -350,13 +379,15 @@ export default function JarvisHome() {
     setAcaoPendente(null)
 
     const dados = await carregarBriefing()
-    setMensagens([{ role: 'assistant', content: montarSaudacao(dados, idioma) }])
+    const saudacao = montarSaudacao(dados, idioma)
+    setMensagens([{ role: 'assistant', content: saudacao }])
+    iniciarTypewriter(saudacao)
     carregarSugestoes(dados)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessao?.token, carregarBriefing, carregarSugestoes, idioma])
 
   useEffect(() => { carregarConversas(); novaConversa() }, [carregarConversas, novaConversa])
-  useEffect(() => { rodapeRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens, acaoPendente])
+  useEffect(() => { rodapeRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens, acaoPendente, twTexto])
 
   // Suporta /jarvis?msg=... (usado pelas sugestões da aba Vida)
   useEffect(() => {
@@ -377,6 +408,7 @@ export default function JarvisHome() {
     setAcaoPendente(null)
     const { data } = await cliente.from('conversa_mensagens').select('role, content, criado_em').eq('conversa_id', id).order('criado_em')
     setMensagens((data || []).map((m) => ({ role: m.role, content: m.content })))
+    setTwAtivo(false)
   }
 
   async function persistirConversa(historico, primeiroTextoUsuario, qtdNovas = 2) {
@@ -433,11 +465,14 @@ export default function JarvisHome() {
 
       const novoHistorico = [...historicoAtual, { role: 'assistant', content: respostaAssistente }]
       setMensagens(novoHistorico)
+      iniciarTypewriter(respostaAssistente)
       if (res.ok && data.requer_confirmacao) setAcaoPendente(data.proposta)
       if (vozAutomatica) falar(respostaAssistente)
       await persistirConversa(novoHistorico, texto)
     } catch {
-      setMensagens((prev) => [...prev, { role: 'assistant', content: t('erro_conexao') }])
+      const erro = t('erro_conexao')
+      setMensagens((prev) => [...prev, { role: 'assistant', content: erro }])
+      iniciarTypewriter(erro)
     }
     setCarregando(false)
   }
@@ -453,9 +488,11 @@ export default function JarvisHome() {
       })
       const data = await res.json()
       const texto = res.ok && data.ok ? data.acao_executada : (data.erro || t('erro_processar'))
-      const msg = { role: 'assistant', content: `✓ ${texto}` }
+      const conteudo = `✓ ${texto}`
+      const msg = { role: 'assistant', content: conteudo }
       const novoHistorico = [...mensagens, msg]
       setMensagens(novoHistorico)
+      iniciarTypewriter(conteudo)
       setAcaoPendente(null)
       if (vozAutomatica) falar(texto)
       await persistirConversa(novoHistorico, texto, 1)
@@ -471,6 +508,7 @@ export default function JarvisHome() {
     const textoCancelado = t('cancelado')
     const novoHistorico = [...mensagens, { role: 'assistant', content: textoCancelado }]
     setMensagens(novoHistorico)
+    iniciarTypewriter(textoCancelado)
     await persistirConversa(novoHistorico, textoCancelado, 1)
   }
 
@@ -481,210 +519,236 @@ export default function JarvisHome() {
     idioma,
   })
 
+  function toggleVoz() {
+    // Solta a sessão de áudio de reprodução antes de pedir a de
+    // gravação — no iOS, alternar entre falar e ouvir sem soltar a
+    // anterior é uma causa conhecida de captura de voz instável.
+    pararFala()
+    if (!escutando && vozAutomatica) desbloquear()
+    if (escutando) pararEscuta()
+    else iniciarEscuta()
+  }
+
   const isJarvis = sessao.espaco.jarvis_enabled === true
+  const orbeStatus = escutando ? 'ouvindo' : carregandoAudio ? 'processando' : falando ? 'falando' : 'aguardando'
+  const localeData = idioma === 'en' ? 'en-US' : 'pt-BR'
 
   return (
-    <div className="jarvis-chat-layout">
-      <Header espaco={sessao.espaco} onSair={sair} />
-      <IndicadorFala ativo={falando} />
+    <>
+      {!bootDone && <BootSequence onDone={() => setBootDone(true)} codigo={sessao.espaco.codigo} idioma={idioma} />}
 
-      {briefing && (
-        <div className="jarvis-briefing">
-          {briefing.tempo && (
-            <div className="bv-tempo-inline">
-              <span className="tempo-num">{briefing.tempo.temp}°C</span>
-              <span className="tempo-txt">{briefing.tempo.descricao}</span>
-              {briefing.tempo.probChuva > 40 && (
-                <span className="tempo-chuva"><Umbrella size={11} /> {briefing.tempo.probChuva}%</span>
+      <div className="hud-root">
+        <div className="hud-grid-bg" />
+        <div className="hud-scanlines" />
+        <div className="hud-scanline-beam" />
+
+        <div className="hud-topbar-wrapper">
+          <TopBar briefing={briefing} codigo={sessao.espaco.codigo} idioma={idioma} onSair={sair} />
+        </div>
+
+        <div className="hud-main">
+          {/* COLUNA ESQUERDA — Briefing + Vida */}
+          <div className="hud-col hud-col--left">
+            <HudPanel label="BRIEFING · HOJE" className="hud-briefing-panel">
+              {briefing?.eventosHoje?.length > 0 ? (
+                <div className="hud-briefing-eventos">
+                  {briefing.eventosHoje.slice(0, 4).map((e, i) => (
+                    <div key={i} className="hud-briefing-evento">
+                      <span className="hud-ev-hora">
+                        {new Date(e.inicio).toLocaleTimeString(localeData, { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span>{e.titulo}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="hud-dim">{idioma === 'en' ? 'No events today' : 'Sem eventos hoje'}</div>
               )}
-            </div>
-          )}
-          {briefing.eventosHoje?.length > 0 && (
-            <div className="bv-eventos-inline">
-              {briefing.eventosHoje.slice(0, 2).map((e, i) => (
-                <span key={i} className="bv-ev">
-                  <span className="bv-ev-hora">{new Date(e.inicio).toLocaleTimeString(localeData, { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}</span>
-                  {e.titulo}
-                </span>
-              ))}
-            </div>
-          )}
-          {(briefing.urgentes?.length > 0 || briefing.paradas?.length > 0) && (
-            <div className="bv-sugestao-inline">
-              → {briefing.urgentes?.length > 0 ? `"${briefing.urgentes[0].nome}" — ${t('prazo_proximo')}` : `"${briefing.paradas[0].nome}" ${t('parada_dias')}`}
-            </div>
-          )}
 
-          {sugestoes.length > 0 && (
-            <div className="bv-sugestoes">
-              {sugestoes.map((sug) => (
+              {briefing?.urgentes?.length > 0 && (
+                <div className="hud-priority-card">
+                  <span className="hud-priority-dot" />
+                  {idioma === 'en' ? 'PRIORITY' : 'PRIORIDADE'}: "{briefing.urgentes[0].nome}"
+                </div>
+              )}
+
+              {sugestoes.length > 0 && (
+                <div className="hud-sugestoes">
+                  {sugestoes.map((sug) => (
+                    <button key={sug.id} type="button" className="hud-sugestao-btn" onClick={() => navegar(sug.rota)}>
+                      <sug.Icon size={13} />
+                      <span className="hud-sugestao-msg">{sug.mensagem}</span>
+                      <ArrowRight size={12} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </HudPanel>
+
+            <HudPanel label={idioma === 'en' ? 'LIFE · WEEK HABITS' : 'VIDA · HÁBITOS DA SEMANA'} className="hud-vida-panel">
+              <VidaHabitos cliente={cliente} idioma={idioma} />
+            </HudPanel>
+          </div>
+
+          {/* CENTRO — Orbe + Chat */}
+          <div className="hud-col hud-col--center">
+            <Orbe status={orbeStatus} size={230} idioma={idioma} />
+
+            <div className="hud-chat-controles">
+              <button type="button" className="hud-ctrl-btn" onClick={() => setMostrarHistorico((v) => !v)}>
+                <History size={13} /> {t('historico')}
+              </button>
+              <div className="hud-chat-controles-grupo">
+                {falaSuportada && (
+                  <button
+                    type="button"
+                    className="hud-ctrl-btn"
+                    data-ativo={vozAutomatica}
+                    onClick={toggleVozAutomatica}
+                    title={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
+                    aria-label={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
+                  >
+                    {carregandoAudio ? <Loader2 size={13} className="icone-girando" /> : falando ? <Volume2 size={13} /> : vozAutomatica ? <Volume1 size={13} /> : <VolumeX size={13} />}
+                  </button>
+                )}
+                {pushSuportado && (
+                  <button
+                    type="button"
+                    className="hud-ctrl-btn"
+                    data-ativo={notifAtivo}
+                    onClick={alternarNotificacoes}
+                    disabled={notifCarregando}
+                    title={notifAtivo ? t('desativar_notif') : t('ativar_notif')}
+                    aria-label={notifAtivo ? t('desativar_notif') : t('ativar_notif')}
+                  >
+                    {notifAtivo ? <Bell size={13} /> : <BellOff size={13} />}
+                  </button>
+                )}
+                <button type="button" className="hud-ctrl-btn" onClick={novaConversa}>
+                  <Plus size={13} /> {t('nova_conversa')}
+                </button>
+              </div>
+            </div>
+
+            {mostrarHistorico && (
+              <div className="hud-historico-sidebar">
+                <div className="hud-historico-header">
+                  <span>{t('conversas_anteriores')}</span>
+                  <button type="button" className="modal-fechar" onClick={() => setMostrarHistorico(false)} aria-label={t('fechar')}>
+                    <X size={15} />
+                  </button>
+                </div>
+                {conversas.length === 0 && <p className="hud-historico-vazio">{t('nenhuma_conversa')}</p>}
+                {conversas.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="hud-historico-item"
+                    data-ativo={c.id === conversaId}
+                    onClick={() => carregarConversa(c.id)}
+                  >
+                    <span className="hud-historico-titulo">{c.titulo || t('conversa_padrao')}</span>
+                    <span className="hud-historico-data">{new Date(c.atualizado_em).toLocaleDateString(localeData, { day: '2-digit', month: '2-digit' })}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="hud-chat">
+              {mensagens.map((m, i) => {
+                const isLast = i === mensagens.length - 1
+                const conteudo = isLast && m.role === 'assistant' && twAtivo ? twTexto : m.content
+                return (
+                  <div key={i} className={`hud-msg hud-msg--${m.role}`}>
+                    <div className="hud-msg-corpo">
+                      <div className={`hud-bubble hud-bubble--${m.role}`} dangerouslySetInnerHTML={{ __html: renderMsg(conteudo) }} />
+                      {m.role === 'assistant' && falaSuportada && (
+                        <button type="button" className="hud-btn-ouvir-msg" onClick={() => falar(m.content)} title={t('ouvir_mensagem')} aria-label={t('ouvir_mensagem')}>
+                          <Volume2 size={11} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {carregando && !twAtivo && (
+                <div className="hud-msg hud-msg--assistant">
+                  <div className="hud-bubble hud-bubble--assistant hud-bubble--loading">
+                    <span className="dot" /><span className="dot" /><span className="dot" />
+                  </div>
+                </div>
+              )}
+
+              {!carregando && carregandoAudio && (
+                <div className="hud-msg hud-msg--assistant">
+                  <div className="hud-bubble hud-bubble--assistant" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--hud-text-dim)' }}>
+                    <Loader2 size={13} className="icone-girando" />
+                    <span>{t('preparando_audio')}</span>
+                  </div>
+                </div>
+              )}
+
+              {acaoPendente && (
+                <div className="hud-confirm-card">
+                  <div className="hud-confirm-label"><Zap size={12} style={{ marginRight: 4, verticalAlign: -2 }} />{t('confirmar_acao_titulo').toUpperCase()}</div>
+                  <div className="hud-confirm-desc">{acaoPendente.descricao}</div>
+                  <div className="hud-confirm-btns">
+                    <button type="button" className="hud-btn-sim" onClick={confirmarAcao} disabled={confirmando}>
+                      <Check size={13} style={{ marginRight: 4, verticalAlign: -2 }} /> {confirmando ? t('executando') : t('confirmar')}
+                    </button>
+                    <button type="button" className="hud-btn-nao" onClick={cancelarAcao} disabled={confirmando}>
+                      <X size={13} style={{ marginRight: 4, verticalAlign: -2 }} /> {t('cancelar')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div ref={rodapeRef} />
+            </div>
+
+            <div className="hud-input-row">
+              {suportado && (
                 <button
-                  key={sug.id}
                   type="button"
-                  className="bv-sugestao-btn"
-                  onClick={() => navegar(sug.rota)}
+                  className={`hud-mic-btn ${escutando ? 'hud-mic-btn--rec' : ''}`}
+                  onClick={toggleVoz}
+                  title={escutando ? t('mic_parar') : t('mic_falar')}
+                  aria-label={escutando ? t('parar_captura') : t('falar_assistente')}
                 >
-                  <sug.Icon size={14} />
-                  <span className="bv-sug-msg">{sug.mensagem}</span>
-                  <ArrowRight size={13} className="bv-sug-arrow" />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button type="button" className="btn-secundario" onClick={() => setMostrarHistorico((v) => !v)}>
-          <History size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
-          {t('historico')}
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-          {falaSuportada && (
-            <button
-              type="button"
-              className="link-acao"
-              data-ativo={vozAutomatica}
-              onClick={toggleVozAutomatica}
-              title={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
-              aria-label={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
-            >
-              {carregandoAudio ? <Loader2 size={14} className="icone-girando" /> : falando ? <Volume2 size={14} /> : vozAutomatica ? <Volume1 size={14} /> : <VolumeX size={14} />}
-            </button>
-          )}
-          {pushSuportado && (
-            <button
-              type="button"
-              className="link-acao"
-              data-ativo={notifAtivo}
-              onClick={alternarNotificacoes}
-              disabled={notifCarregando}
-              title={notifAtivo ? t('desativar_notif') : t('ativar_notif')}
-              aria-label={notifAtivo ? t('desativar_notif') : t('ativar_notif')}
-            >
-              {notifAtivo ? <Bell size={14} /> : <BellOff size={14} />}
-            </button>
-          )}
-          <button type="button" className="link-acao" onClick={novaConversa}>
-            <Plus size={14} />
-            {t('nova_conversa')}
-          </button>
-        </div>
-      </div>
-
-      {mostrarHistorico && (
-        <div className="historico-sidebar">
-          <div className="historico-header">
-            <span className="text-titulo" style={{ fontSize: 14 }}>{t('conversas_anteriores')}</span>
-            <button type="button" className="modal-fechar" onClick={() => setMostrarHistorico(false)} aria-label={t('fechar')}>
-              <X size={16} />
-            </button>
-          </div>
-          {conversas.length === 0 && <p className="text-micro" style={{ padding: 'var(--space-md)' }}>{t('nenhuma_conversa')}</p>}
-          {conversas.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className="historico-item"
-              data-ativo={c.id === conversaId}
-              onClick={() => carregarConversa(c.id)}
-            >
-              <span className="hist-titulo">{c.titulo || t('conversa_padrao')}</span>
-              <span className="hist-data">{new Date(c.atualizado_em).toLocaleDateString(localeData, { day: '2-digit', month: '2-digit' })}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="chat-historico">
-        {mensagens.map((m, i) => (
-          <div key={i} className={`chat-msg ${m.role}`}>
-            {m.role === 'assistant' && <span className="chat-avatar">J</span>}
-            <div className="chat-msg-corpo">
-              <div className="chat-bubble" dangerouslySetInnerHTML={{ __html: renderMsg(m.content) }} />
-              {m.role === 'assistant' && falaSuportada && (
-                <button type="button" className="btn-ouvir-msg" onClick={() => falar(m.content)} title={t('ouvir_mensagem')} aria-label={t('ouvir_mensagem')}>
-                  <Volume2 size={12} />
+                  {escutando ? <Square size={16} /> : <Mic size={16} />}
                 </button>
               )}
-            </div>
-          </div>
-        ))}
-
-        {carregando && (
-          <div className="chat-msg assistant">
-            <span className="chat-avatar">J</span>
-            <div className="chat-bubble">
-              <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
-            </div>
-          </div>
-        )}
-
-        {!carregando && carregandoAudio && (
-          <div className="chat-msg assistant">
-            <span className="chat-avatar">J</span>
-            <div className="chat-bubble" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-dim)' }}>
-              <Loader2 size={13} className="icone-girando" />
-              <span className="text-micro">{t('preparando_audio')}</span>
-            </div>
-          </div>
-        )}
-
-        {acaoPendente && (
-          <div className="confirmacao-card">
-            <p className="conf-titulo"><Zap size={13} /> {t('confirmar_acao_titulo')}</p>
-            <p className="conf-desc">{acaoPendente.descricao}</p>
-            <div className="conf-acoes">
-              <button type="button" className="conf-sim" onClick={confirmarAcao} disabled={confirmando}>
-                <Check size={14} /> {confirmando ? t('executando') : t('confirmar')}
-              </button>
-              <button type="button" className="conf-nao" onClick={cancelarAcao} disabled={confirmando}>
-                <X size={14} /> {t('cancelar')}
+              <input
+                className="hud-input"
+                type="text"
+                placeholder={escutando ? t('ouvindo') : t('fale_com_jarvis')}
+                value={escutando ? textoInterim : input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && enviar()}
+                disabled={carregando}
+                readOnly={escutando}
+              />
+              <button type="button" className="hud-send-btn" onClick={() => enviar()} disabled={!input.trim() || carregando} aria-label={t('enviar_aria')}>
+                <ArrowUp size={18} />
               </button>
             </div>
           </div>
-        )}
 
-        <div ref={rodapeRef} />
+          {/* COLUNA DIREITA — Projetos + Financeiro */}
+          <div className="hud-col hud-col--right">
+            <HudPanel label="PROJETOS" className="hud-projetos-panel">
+              <PainelProjetos cliente={cliente} idioma={idioma} />
+            </HudPanel>
+
+            <HudPanel className="hud-financeiro-panel">
+              <PainelFinanceiro cliente={cliente} idioma={idioma} />
+            </HudPanel>
+          </div>
+        </div>
+
+        {isJarvis && <HudTabBar />}
       </div>
-
-      <div className="chat-input-area">
-        {suportado && (
-          <button
-            type="button"
-            className="chat-mic"
-            data-ativo={escutando}
-            onClick={() => {
-              // Solta a sessão de áudio de reprodução antes de pedir a de
-              // gravação — no iOS, alternar entre falar e ouvir sem soltar
-              // a anterior é uma causa conhecida de captura de voz instável.
-              pararFala()
-              if (!escutando && vozAutomatica) desbloquear()
-              if (escutando) pararEscuta()
-              else iniciarEscuta()
-            }}
-            title={escutando ? t('mic_parar') : t('mic_falar')}
-            aria-label={escutando ? t('parar_captura') : t('falar_assistente')}
-          >
-            {escutando ? <Square size={16} /> : <Mic size={16} />}
-          </button>
-        )}
-        <input
-          className="chat-input"
-          type="text"
-          placeholder={escutando ? t('ouvindo') : t('fale_com_jarvis')}
-          value={escutando ? textoInterim : input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && enviar()}
-          disabled={carregando}
-          readOnly={escutando}
-        />
-        <button type="button" className="chat-enviar" onClick={() => enviar()} disabled={!input.trim() || carregando} aria-label={t('enviar_aria')}>
-          <ArrowUp size={18} />
-        </button>
-      </div>
-
-      {isJarvis && <TabBar />}
-    </div>
+    </>
   )
 }

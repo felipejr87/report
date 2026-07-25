@@ -1013,370 +1013,694 @@ a.link-acao { text-decoration-line: underline; }
 .res-detalhe { font-size: 13px; color: var(--text-dim); }
 .res-meta { font-size: 12px; color: var(--text-dim); }
 
-/* =============================================
-   Assistente Jarvis — chat
-   ============================================= */
-
-/* Tela inteira travada na viewport — só .chat-historico rola por
-   dentro. 100dvh depois de 100vh é fallback intencional: navegadores
-   sem suporte a dvh ficam com vh, os com suporte pegam a viewport
-   dinâmica (ajusta com barra de endereço/teclado do iOS). */
-.jarvis-chat-layout {
-  /* position:fixed + inset:0 trava exatamente na viewport real,
-     independente de qualquer padding/height dos ancestrais (body tem
-     padding-top: env(safe-area-inset-top) pras páginas normais — um
-     descendente fixed ignora isso, por isso o safe-area-top é
-     reaplicado aqui embaixo). height:100dvh direto num filho de
-     #root parecia certo mas #root só tem (100% - safe-area-top) de
-     espaço de verdade, então o container sempre ficava um pouco mais
-     alto que o espaço disponível — e essa sobra é exatamente o que
-     virava scroll da página inteira, empurrando a barra de input pra
-     fora da tela. */
-  position: fixed;
-  inset: 0;
-  max-width: 680px;
-  margin: 0 auto;
-  padding: var(--space-md);
-  padding-top: calc(var(--space-md) + env(safe-area-inset-top));
-  /* 60px cobre o conteúdo da tab bar (ícone+label+respiro); o resto
-     é o safe-area-bottom de verdade (home indicator), que antes não
-     entrava na conta e podia deixar a tab bar cobrindo a ponta do
-     campo de texto. */
-  padding-bottom: calc(60px + env(safe-area-inset-bottom));
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  overflow: hidden;
-}
-
-.chat-historico {
-  flex: 1;
-  /* min-height:0 é o que permite esse filho flex encolher e rolar
-     dentro do container em vez de empurrar a página inteira — sem
-     isso o histórico de mensagens cresce, a página rola, e a barra
-     de input/mic (que não é fixed) some junto por baixo da tela. */
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  padding: var(--space-sm) 0;
-}
-
-.chat-msg {
-  display: flex;
-  gap: var(--space-sm);
-  align-items: flex-start;
-}
-.chat-msg.user { flex-direction: row-reverse; }
-
-.chat-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--jarvis-ciano);
-  color: var(--jarvis-azul-profundo);
-  font-weight: 600;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.chat-bubble {
-  max-width: 85%;
-  padding: var(--space-sm) var(--space-md);
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.55;
-}
-.chat-msg.assistant .chat-bubble {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  color: var(--text);
-  border-radius: 4px 12px 12px 12px;
-}
-.chat-msg.user .chat-bubble {
-  background: var(--botao-primario-bg);
-  color: var(--botao-primario-texto);
-  border-radius: 12px 4px 12px 12px;
-}
-
-.chat-bubble .typing-dot {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--text-dim);
-  margin-right: 3px;
-  animation: piscar 1.2s infinite;
-}
-.chat-bubble .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-.chat-bubble .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-@keyframes piscar {
-  0%, 80%, 100% { opacity: 0.25; }
-  40% { opacity: 1; }
-}
-
+/* Assistente Jarvis — chat, briefing inline e histórico de conversas
+   migraram pro visual "Command Center" (ver seção JARVIS HUD, classes
+   .hud-*, mais abaixo). As regras antigas (.jarvis-chat-layout,
+   .chat-*, .jarvis-briefing, .bv-*, .historico-*, .confirmacao-card,
+   .conf-*) foram removidas por não terem mais nenhum uso — só
+   JarvisHome.jsx as usava. .icone-girando segue em uso (spinner de
+   carregamento reaproveitado nos controles do HUD). */
 .icone-girando { animation: girar 1s linear infinite; }
 @keyframes girar {
   to { transform: rotate(360deg); }
 }
 
-.chat-input-area {
-  display: flex;
-  gap: var(--space-sm);
-  align-items: center;
-  padding-top: var(--space-sm);
-  border-top: 1px solid var(--line);
-  flex-shrink: 0;
-}
-
-.chat-mic {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 0;
-  color: var(--text-mid);
-}
-.chat-mic[data-ativo="true"] {
-  background: var(--atencao);
-  border-color: var(--atencao);
-  color: #fff;
-  animation: pulso-mic 1s infinite;
-}
-
-.chat-input {
-  flex: 1;
-  border-radius: 20px;
-  border: 1px solid var(--line);
-  padding: var(--space-sm) var(--space-md);
-}
-.chat-input:focus { border-color: var(--text); }
-
-.chat-enviar {
-  background: var(--botao-primario-bg);
-  color: var(--botao-primario-texto);
-  border: none;
-  border-radius: 50%;
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 0;
-}
 
 /* =============================================
-   Jarvis — briefing compacto inline, topo da tela Jarvis (JarvisHome)
+   JARVIS HUD — Command Center (redesign /jarvis)
+   Paleta e tipografia própria, fixas (não seguem
+   data-tema claro/escuro do resto do app — o HUD é
+   sempre escuro, é a estética em si).
    ============================================= */
 
-.jarvis-briefing {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-bottom: var(--space-sm);
-  border-bottom: 1px solid var(--line);
-  font-size: 13px;
+:root {
+  --hud-bg:        #010609;
+  --hud-bg-radial: radial-gradient(1200px 700px at 50% 30%, #06202e 0%, #03101b 45%, #010609 100%);
+  --hud-panel:     rgba(2,22,34,.6);
+  --hud-border:    rgba(53,226,255,.25);
+  --hud-cyan:      #35e2ff;
+  --hud-cyan-lt:   #9ff2ff;
+  --hud-cyan-dk:   #0aa8c9;
+  --hud-text:      #c8eef7;
+  --hud-text-lt:   #d9f7ff;
+  --hud-text-dim:  #4a8ba0;
+  --hud-text-sec:  #8fb8c6;
+  --hud-amber:     #ffb74d;
+  --hud-amber-lt:  #ffd9a0;
+  --hud-amber-bg:  rgba(255,183,77,.07);
+  --hud-amber-bd:  rgba(255,183,77,.4);
+  --hud-green:     #7dffb0;
+  --hud-red:       #ff5470;
+  --hud-red-lt:    #ff9db0;
+
+  --font-hud:      'Rajdhani', sans-serif;
+  --font-mono-hud: 'Share Tech Mono', monospace;
 }
 
-.bv-tempo-inline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-mid);
+@keyframes spin     { to { transform: rotate(360deg) } }
+@keyframes spinRev  { to { transform: rotate(-360deg) } }
+@keyframes corePulse {
+  0%,100% { box-shadow: 0 0 34px 8px rgba(0,229,255,.5), inset 0 0 22px rgba(0,229,255,.9) }
+  50%     { box-shadow: 0 0 60px 22px rgba(0,229,255,.75), inset 0 0 34px rgba(180,250,255,1) }
 }
-.tempo-num { font-weight: 600; color: var(--text); }
-.tempo-txt { color: var(--text-dim); text-transform: capitalize; }
-.tempo-chuva { display: inline-flex; align-items: center; gap: 2px; color: var(--refinamento); }
+@keyframes blink    { 50% { opacity: .25 } }
+@keyframes wave     { 0%,100% { transform: scaleY(.18) } 50% { transform: scaleY(1) } }
+@keyframes scanline { 0% { top: -8% } 100% { top: 108% } }
+@keyframes fadein   { from { opacity:0; transform: translateY(8px) } to { opacity:1; transform: none } }
+@keyframes flick    { 0%,93%,100%{opacity:1} 94%{opacity:.55} 97%{opacity:.85} }
+@keyframes hudBoot  { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:none } }
 
-.bv-eventos-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: var(--text-mid);
+/* ---- Painel HUD reutilizável ---- */
+.hud-panel {
+  position: relative;
+  background: var(--hud-panel);
+  border: 1px solid var(--hud-border);
+  backdrop-filter: blur(6px);
+  padding: 16px 18px;
+  font-family: var(--font-hud);
+  color: var(--hud-text);
 }
-.bv-ev { display: flex; gap: 6px; }
-.bv-ev-hora { color: var(--jarvis-ciano); flex-shrink: 0; }
-
-.bv-sugestao-inline {
-  color: var(--atencao);
-  font-style: italic;
-}
-
-.bv-sugestoes {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 2px;
-}
-.bv-sugestao-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px var(--space-sm);
-  background: color-mix(in srgb, var(--jarvis-ciano) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--jarvis-ciano) 30%, transparent);
-  border-radius: var(--space-sm);
-  color: var(--jarvis-ciano);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--ease), border-color var(--ease);
-}
-.bv-sugestao-btn:hover {
-  background: color-mix(in srgb, var(--jarvis-ciano) 14%, transparent);
-  border-color: color-mix(in srgb, var(--jarvis-ciano) 50%, transparent);
-}
-.bv-sug-msg { flex: 1; color: var(--text-mid); }
-.bv-sug-arrow { flex-shrink: 0; color: var(--jarvis-ciano); }
-
-/* =============================================
-   Assistente Jarvis — histórico de conversas
-   ============================================= */
-
-.historico-sidebar {
+.hud-panel::before {
+  content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  max-height: 60vh;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--space-sm);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, .25);
-  z-index: 60;
-  overflow-y: auto;
-}
-
-.historico-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-sm) var(--space-md);
-  border-bottom: 1px solid var(--line);
-  position: sticky;
-  top: 0;
-  background: var(--surface);
-}
-
-.historico-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-sm);
-  width: 100%;
-  padding: var(--space-sm) var(--space-md);
-  background: none;
-  border: none;
-  border-radius: 0;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  color: var(--text);
-}
-.historico-item:hover { background: var(--bg); }
-.historico-item[data-ativo="true"] { border-left: 2px solid var(--jarvis-ciano); }
-
-.hist-titulo { font-size: 13px; flex: 1; }
-.hist-data { font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
-
-/* Resposta por voz */
-.link-acao[data-ativo="true"] { color: var(--jarvis-ciano); text-decoration-color: var(--jarvis-ciano); }
-
-.chat-msg-corpo {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 85%;
-}
-.chat-msg.user .chat-msg-corpo { align-items: flex-end; }
-
-.btn-ouvir-msg {
-  align-self: flex-start;
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--text-dim);
-  opacity: 0.6;
-}
-.btn-ouvir-msg:hover { opacity: 1; color: var(--text); }
-
-/* Card de confirmação de ação (Jarvis) */
-.confirmacao-card {
-  border: 1px solid var(--jarvis-ciano);
-  border-radius: var(--space-sm);
-  padding: var(--space-md);
-  background: var(--surface);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-.conf-titulo {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--jarvis-ciano);
-}
-.conf-desc { font-size: 14px; color: var(--text); }
-.conf-acoes { display: flex; gap: var(--space-sm); }
-.conf-sim, .conf-nao {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  padding: 6px 14px;
-}
-.conf-sim { background: var(--botao-primario-bg); color: var(--botao-primario-texto); }
-.conf-nao { background: transparent; color: var(--text-dim); border: 1px solid var(--line); }
-
-/* Indicador de fala — sinaliza que o Jarvis está falando (resposta por
-   voz). Fixo, transparente ao toque (pointer-events: none) e num canto,
-   nunca cobrindo conteúdo — só some quando a fala termina. */
-.indicador-fala {
-  position: fixed;
-  top: calc(env(safe-area-inset-top) + 14px);
-  right: var(--space-md);
-  width: 34px;
-  height: 34px;
-  z-index: 90;
+  top: -1px; left: -1px;
+  width: 16px; height: 16px;
+  border-top: 2px solid var(--hud-cyan);
+  border-left: 2px solid var(--hud-cyan);
   pointer-events: none;
 }
-.indicador-fala-nucleo {
+.hud-panel::after {
+  content: '';
   position: absolute;
-  inset: 5px;
-  border-radius: 50%;
-  background: var(--jarvis-azul-profundo);
-  color: var(--jarvis-branco-neon);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  bottom: -1px; right: -1px;
+  width: 16px; height: 16px;
+  border-bottom: 2px solid var(--hud-cyan);
+  border-right: 2px solid var(--hud-cyan);
+  pointer-events: none;
+}
+.hud-panel--amber { border-color: var(--hud-amber-bd); }
+.hud-panel--amber::before,
+.hud-panel--amber::after { border-color: var(--hud-amber); }
+
+.hud-panel-label {
+  font-family: var(--font-mono-hud);
   font-size: 11px;
-  font-weight: 600;
-  border: 1px solid var(--jarvis-ciano);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--jarvis-ciano) 60%, transparent);
+  letter-spacing: 4px;
+  color: var(--hud-cyan);
+  margin-bottom: 14px;
+  text-transform: uppercase;
 }
-.indicador-fala-anel {
-  position: absolute;
+
+.hud-progress-bg {
+  height: 5px;
+  background: rgba(53,226,255,.12);
+}
+.hud-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--hud-cyan-dk), var(--hud-cyan-lt));
+  box-shadow: 0 0 10px rgba(0,229,255,.5);
+  transition: width .6s ease;
+}
+.hud-progress-fill--amber {
+  background: linear-gradient(90deg, #b57a25, var(--hud-amber));
+  box-shadow: 0 0 10px rgba(255,183,77,.5);
+}
+
+/* ---- Boot sequence ---- */
+.hud-boot-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(1,6,10,.96);
+  display: grid; place-items: center;
+  transition: opacity .6s;
+}
+.hud-boot-overlay.fading { opacity: 0; }
+.hud-boot-content {
+  width: min(560px, 92vw);
+  font-family: var(--font-mono-hud);
+  font-size: 15px;
+  color: var(--hud-cyan);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.hud-boot-line { animation: hudBoot .3s ease both; }
+.hud-boot-bar-bg {
+  height: 3px;
+  background: rgba(53,226,255,.15);
+  margin-top: 14px;
+}
+.hud-boot-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--hud-cyan-dk), var(--hud-cyan));
+  box-shadow: 0 0 10px rgba(0,229,255,.5);
+  transition: width .4s ease;
+}
+
+/* ---- Orbe / reator ---- */
+.orbe-wrapper { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.orbe-container { position: relative; width: var(--orbe-size, 230px); height: var(--orbe-size, 230px); flex: 0 0 auto; }
+.orbe-ring { position: absolute; border-radius: 50%; }
+.orbe-ring--dashed {
   inset: 0;
-  border-radius: 50%;
-  border: 1px solid var(--jarvis-ciano);
-  opacity: .7;
-  animation: fala-anel 1.6s ease-out infinite;
+  border: 1px dashed rgba(53,226,255,.35);
+  animation: spin 22s linear infinite;
 }
-.indicador-fala-anel:nth-child(2) { animation-delay: .55s; }
-@keyframes fala-anel {
-  0%   { transform: scale(.7); opacity: .7; }
-  100% { transform: scale(1.9); opacity: 0; }
+.orbe-ring--fast {
+  inset: 6.1%;
+  border: 2px solid transparent;
+  border-top-color: var(--hud-cyan);
+  border-right-color: rgba(53,226,255,.35);
+  animation: spin 5.5s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(0,229,255,.6));
+}
+.orbe-ring--rev {
+  inset: 12.2%;
+  border: 1px solid rgba(53,226,255,.25);
+  border-bottom: 2px solid var(--hud-cyan-lt);
+  animation: spinRev 8s linear infinite;
+}
+.orbe-ring--conic {
+  inset: 20%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(53,226,255,0) 0 40deg,
+    rgba(53,226,255,.25) 40deg 70deg,
+    rgba(53,226,255,0) 70deg 200deg,
+    rgba(53,226,255,.18) 200deg 240deg,
+    rgba(53,226,255,0) 240deg
+  );
+  animation: spin 12s linear infinite;
+}
+.orbe-core {
+  position: absolute;
+  inset: 30.4%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #eafcff 0%, #7deeff 35%, #0aa8c9 70%, rgba(3,40,56,.9) 100%);
+  animation: corePulse 2.6s ease-in-out infinite;
+  display: grid;
+  place-items: center;
+}
+.orbe-j {
+  font-family: var(--font-mono-hud);
+  font-size: calc(var(--orbe-size, 230px) * 0.113);
+  color: #03222e;
+  font-weight: 700;
+  user-select: none;
+}
+.orbe-status {
+  font-family: var(--font-mono-hud);
+  font-size: 12px;
+  letter-spacing: 6px;
+  color: var(--hud-cyan);
+  margin: 12px 0 4px;
+  animation: blink 3s infinite;
+  text-align: center;
+  min-height: 18px;
+}
+.orbe-status--active { animation: none; opacity: 1; }
+.orbe-wave { display: flex; gap: 3px; align-items: center; height: 30px; margin-bottom: 6px; }
+.wave-bar {
+  display: block;
+  width: 3px;
+  height: 26px;
+  background: var(--hud-cyan);
+  box-shadow: 0 0 6px rgba(0,229,255,.5);
+  transform: scaleY(.12);
+  opacity: .35;
+  transform-origin: center;
+  transition: transform .2s, opacity .2s;
+}
+.wave-bar--active { animation: wave var(--wave-dur, .9s) ease-in-out infinite; opacity: 1; }
+
+/* ---- Top bar (desktop) ---- */
+.hud-topbar {
+  position: relative; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 28px;
+  border-bottom: 1px solid rgba(53,226,255,.18);
+  animation: flick 9s linear infinite;
+  flex: 0 0 auto;
+  gap: 18px;
+}
+.hud-topbar-logo { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.hud-logo-circle {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(53,226,255,.6);
+  display: grid; place-items: center;
+  font-family: var(--font-mono-hud);
+  color: var(--hud-cyan-lt);
+  font-size: 15px;
+  flex-shrink: 0;
+  box-shadow: 0 0 14px rgba(0,229,255,.35), inset 0 0 10px rgba(0,229,255,.25);
+}
+.hud-topbar-title {
+  font-size: 17px; font-weight: 700;
+  letter-spacing: 4px; color: #e8fbff;
+  font-family: var(--font-hud);
+  white-space: nowrap;
+}
+.hud-topbar-codigo { color: var(--hud-cyan); }
+.hud-topbar-sub {
+  font-family: var(--font-mono-hud);
+  font-size: 10px; letter-spacing: 3px;
+  color: var(--hud-text-dim);
+  white-space: nowrap;
+}
+.hud-topbar-clock { text-align: center; flex-shrink: 0; }
+.hud-clock-time {
+  font-family: var(--font-mono-hud);
+  font-size: 34px; color: var(--hud-cyan-lt);
+  text-shadow: 0 0 18px rgba(0,229,255,.55);
+  letter-spacing: 3px;
+}
+.hud-clock-date {
+  font-size: 12px; letter-spacing: 4px;
+  color: var(--hud-text-dim); text-transform: uppercase;
+  font-family: var(--font-mono-hud);
+}
+.hud-topbar-right {
+  display: flex; align-items: center; gap: 22px;
+  font-family: var(--font-mono-hud); font-size: 12px;
+  flex-shrink: 0;
+}
+.hud-clima { display: flex; gap: 8px; align-items: center; }
+.hud-clima-temp { color: var(--hud-cyan-lt); }
+.hud-clima-desc, .hud-clima-chuva { color: var(--hud-text-dim); }
+.hud-status-dots { display: flex; gap: 6px; align-items: center; }
+.hud-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--hud-text-dim); }
+.hud-dot--on { background: var(--hud-cyan); box-shadow: 0 0 8px var(--hud-cyan); }
+.hud-dot--blink { animation: blink 2.4s infinite; }
+.hud-dot--amber { background: var(--hud-amber); box-shadow: 0 0 8px var(--hud-amber); }
+.hud-online { color: var(--hud-cyan); }
+
+/* Controles de sistema (idioma/segurança/tema/sair) — não estavam no
+   protótipo original, preservam funcionalidade que já existia no
+   Header antigo e some se a TopBar simplesmente substituir o Header. */
+.hud-topbar-controles {
+  display: flex; align-items: center; gap: 10px;
+  padding-left: 16px;
+  border-left: 1px solid rgba(53,226,255,.18);
+}
+.hud-topbar-controles .idioma-toggle,
+.hud-topbar-controles .modal-fechar,
+.hud-topbar-controles .link-acao {
+  color: var(--hud-text-sec);
+  font-family: var(--font-mono-hud);
+  font-size: 11px;
+}
+.hud-topbar-controles .idioma-toggle { border-color: rgba(53,226,255,.35); }
+.hud-topbar-controles .link-acao:hover,
+.hud-topbar-controles .modal-fechar:hover,
+.hud-topbar-controles .idioma-toggle:hover { color: var(--hud-cyan-lt); border-color: rgba(53,226,255,.6); }
+
+/* ---- Painel financeiro ---- */
+.fin-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.fin-kpi-label {
+  font-family: var(--font-mono-hud);
+  font-size: 10px; letter-spacing: 2px;
+  color: var(--hud-text-dim); margin-bottom: 4px;
+}
+.fin-kpi-valor { font-family: var(--font-mono-hud); font-size: 22px; font-weight: 700; }
+.fin-kpi--cyan  { color: var(--hud-cyan-lt); text-shadow: 0 0 12px rgba(0,229,255,.4); }
+.fin-kpi--amber { color: var(--hud-amber-lt); text-shadow: 0 0 12px rgba(255,183,77,.35); }
+
+.fin-chart {
+  display: flex; align-items: flex-end; gap: 6px;
+  height: 52px; margin-bottom: 14px;
+  border-bottom: 1px solid rgba(53,226,255,.15);
+  padding-bottom: 6px;
+}
+.fin-bar { flex: 1; background: rgba(53,226,255,.3); transition: height .4s ease; }
+.fin-bar--atual {
+  background: linear-gradient(180deg, var(--hud-cyan-lt), var(--hud-cyan-dk));
+  box-shadow: 0 0 10px rgba(0,229,255,.5);
+}
+
+.fin-extrato { display: flex; flex-direction: column; gap: 9px; }
+.fin-extrato-label {
+  font-family: var(--font-mono-hud);
+  font-size: 10px; letter-spacing: 3px;
+  color: var(--hud-text-dim); margin-bottom: 4px;
+}
+.fin-extrato-item { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--hud-text-sec); }
+.fin-extrato-data { font-family: var(--font-mono-hud); font-size: 11px; color: var(--hud-text-dim); margin-right: 8px; }
+.fin-extrato-valor { font-family: var(--font-mono-hud); color: var(--hud-text-lt); flex-shrink: 0; }
+.fin-val--pos { color: var(--hud-green); }
+
+.fin-alerta {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--hud-amber-bd);
+  background: var(--hud-amber-bg);
+  font-size: 13px; color: var(--hud-amber-lt);
+  display: flex; gap: 8px; align-items: center;
+  font-family: var(--font-mono-hud); letter-spacing: 1px;
+  animation: blink 2s infinite;
+}
+.fin-alerta-dot {
+  width: 6px; height: 6px;
+  background: var(--hud-amber);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--hud-amber);
+  flex-shrink: 0;
+}
+
+/* ---- Painel projetos ---- */
+.proj-lista { display: flex; flex-direction: column; gap: 12px; }
+.proj-item { display: flex; flex-direction: column; gap: 6px; }
+.proj-item-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; }
+.proj-nome { color: var(--hud-text-lt); display: flex; align-items: center; gap: 6px; min-width: 0; }
+.proj-fase {
+  font-family: var(--font-mono-hud); font-size: 10px; letter-spacing: 1.5px;
+  color: var(--hud-text-dim); text-transform: uppercase; flex-shrink: 0;
+}
+.proj-meta { font-family: var(--font-mono-hud); font-size: 11px; color: var(--hud-text-dim); }
+
+/* ---- Painel vida / hábitos ---- */
+.vida-habitos { display: flex; flex-direction: column; gap: 12px; }
+.vida-habito-topo { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; }
+.vida-habito-nome { color: var(--hud-text-lt); }
+.vida-habito-contagem { font-family: var(--font-mono-hud); font-size: 12px; color: var(--hud-text-dim); }
+.vida-agenda { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(53,226,255,.12); }
+.vida-agenda-item { display: flex; gap: 10px; font-size: 13px; color: var(--hud-text-sec); }
+.vida-agenda-hora { font-family: var(--font-mono-hud); color: var(--hud-cyan-lt); font-size: 12px; flex-shrink: 0; width: 42px; }
+
+/* ---- Briefing ---- */
+.hud-briefing-eventos { display: flex; flex-direction: column; gap: 10px; font-size: 15px; }
+.hud-briefing-evento  { display: flex; gap: 10px; align-items: baseline; }
+.hud-ev-hora {
+  font-family: var(--font-mono-hud);
+  color: var(--hud-cyan-lt); font-size: 13px;
+  flex-shrink: 0; width: 42px;
+}
+.hud-dim { color: var(--hud-text-dim); font-size: 14px; }
+
+.hud-priority-card {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--hud-amber-bd);
+  background: var(--hud-amber-bg);
+  font-size: 13px; color: var(--hud-amber-lt);
+  display: flex; gap: 8px; align-items: center;
+  font-family: var(--font-mono-hud);
+}
+.hud-priority-dot {
+  width: 6px; height: 6px;
+  background: var(--hud-amber);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--hud-amber);
+  animation: blink 1.6s infinite;
+  flex-shrink: 0;
+}
+
+/* Sugestões proativas (mesma lógica de bv-sugestoes, look HUD) */
+.hud-sugestoes { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.hud-sugestao-btn {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  background: rgba(53,226,255,.06);
+  border: 1px solid rgba(53,226,255,.22);
+  color: var(--hud-cyan-lt);
+  font-family: var(--font-hud); font-size: 13px;
+  text-align: left; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.hud-sugestao-btn:hover { background: rgba(53,226,255,.12); border-color: rgba(53,226,255,.4); }
+.hud-sugestao-msg { flex: 1; color: var(--hud-text-sec); }
+
+/* ---- Controles auxiliares do chat (histórico/nova conversa/voz/notif) ---- */
+.hud-chat-controles {
+  width: 100%; max-width: 640px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--font-mono-hud); font-size: 11px;
+  color: var(--hud-text-dim);
+  margin-bottom: 4px;
+}
+.hud-chat-controles-grupo { display: flex; align-items: center; gap: 14px; }
+.hud-ctrl-btn {
+  background: none; border: none; cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+  color: var(--hud-text-dim);
+  font-family: var(--font-mono-hud); font-size: 11px;
+  letter-spacing: 1px;
+  padding: 4px;
+  transition: color .15s;
+}
+.hud-ctrl-btn:hover { color: var(--hud-cyan-lt); }
+.hud-ctrl-btn[data-ativo="true"] { color: var(--hud-cyan); }
+.hud-ctrl-btn:disabled { opacity: .4; cursor: default; }
+
+.hud-historico-sidebar {
+  position: absolute;
+  top: 60px; left: 24px; right: 24px;
+  max-height: 60vh; overflow-y: auto;
+  background: rgba(2,10,16,.94);
+  border: 1px solid var(--hud-border);
+  backdrop-filter: blur(10px);
+  z-index: 15;
+  font-family: var(--font-hud);
+}
+.hud-historico-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(53,226,255,.15);
+  font-family: var(--font-mono-hud); font-size: 11px;
+  letter-spacing: 2px; color: var(--hud-cyan);
+}
+.hud-historico-item {
+  display: flex; flex-direction: column; gap: 2px;
+  width: 100%; text-align: left;
+  padding: 10px 16px;
+  background: none; border: none; border-bottom: 1px solid rgba(53,226,255,.08);
+  color: var(--hud-text-sec); cursor: pointer;
+}
+.hud-historico-item:hover { background: rgba(53,226,255,.06); }
+.hud-historico-item[data-ativo="true"] { border-left: 2px solid var(--hud-cyan); }
+.hud-historico-titulo { font-size: 13px; color: var(--hud-text-lt); }
+.hud-historico-data { font-family: var(--font-mono-hud); font-size: 10px; color: var(--hud-text-dim); }
+.hud-historico-vazio { padding: 16px; font-size: 13px; color: var(--hud-text-dim); }
+
+/* ---- Root / fundo ---- */
+.hud-root {
+  position: relative;
+  min-height: 100dvh;
+  background: var(--hud-bg-radial);
+  font-family: var(--font-hud);
+  color: var(--hud-text);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.hud-grid-bg {
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(53,226,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(53,226,255,.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none; z-index: 0;
+}
+.hud-scanlines {
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0 2px, transparent 2px 4px);
+  pointer-events: none; z-index: 1;
+}
+.hud-scanline-beam {
+  position: fixed; left: 0; right: 0; height: 120px;
+  background: linear-gradient(180deg, transparent, rgba(53,226,255,.06), transparent);
+  animation: scanline 7s linear infinite;
+  pointer-events: none; z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-scanline-beam,
+  .orbe-ring, .orbe-core,
+  .hud-topbar { animation: none !important; }
+}
+
+.hud-main {
+  position: relative; z-index: 5;
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: 370px 1fr 370px;
+  gap: 18px;
+  padding: 18px 24px;
+  overflow: hidden;
+}
+.hud-col { display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+.hud-col--left  { overflow-y: auto; }
+.hud-col--right { overflow-y: auto; }
+.hud-col--center { display: flex; flex-direction: column; align-items: center; overflow: hidden; }
+
+.hud-briefing-panel { flex: 0 0 auto; }
+.hud-vida-panel      { flex: 1; overflow-y: auto; }
+.hud-projetos-panel  { flex: 1; overflow-y: auto; }
+.hud-financeiro-panel { flex: 1; overflow-y: auto; }
+
+/* ---- Chat ---- */
+.hud-chat {
+  flex: 1; min-height: 0; width: 100%;
+  max-width: 640px; overflow-y: auto;
+  display: flex; flex-direction: column;
+  gap: 12px; padding: 6px 10px;
+}
+.hud-msg { display: flex; animation: fadein .35s ease; }
+.hud-msg--user      { justify-content: flex-end; }
+.hud-msg--assistant { justify-content: flex-start; }
+.hud-bubble { max-width: 82%; padding: 11px 14px; font-size: 15px; line-height: 1.55; font-family: var(--font-hud); }
+.hud-bubble--user {
+  max-width: 78%;
+  background: rgba(53,226,255,.14);
+  border: 1px solid rgba(53,226,255,.45);
+  border-radius: 14px;
+  color: var(--hud-text-lt);
+}
+.hud-bubble--assistant {
+  background: rgba(2,25,38,.75);
+  border: 1px solid rgba(53,226,255,.15);
+  border-left: 2px solid var(--hud-cyan);
+  border-radius: 0 14px 14px 14px;
+}
+.hud-msg-corpo { display: flex; flex-direction: column; gap: 3px; max-width: 82%; }
+.hud-msg--user .hud-msg-corpo { align-items: flex-end; }
+.hud-btn-ouvir-msg {
+  align-self: flex-start;
+  background: none; border: none; padding: 0;
+  color: var(--hud-text-dim); opacity: .6;
+  cursor: pointer;
+}
+.hud-btn-ouvir-msg:hover { opacity: 1; color: var(--hud-cyan-lt); }
+.hud-bubble--loading { display: flex; gap: 5px; padding: 14px; }
+.hud-bubble--loading .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--hud-cyan);
+  animation: blink 1.2s infinite;
+}
+.hud-bubble--loading .dot:nth-child(2) { animation-delay: .2s; }
+.hud-bubble--loading .dot:nth-child(3) { animation-delay: .4s; }
+
+.hud-confirm-card {
+  border: 1px solid var(--hud-amber-bd);
+  background: var(--hud-amber-bg);
+  padding: 14px; margin: 4px 0;
+  display: flex; flex-direction: column; gap: 8px;
+  animation: fadein .3s ease;
+  width: 100%; max-width: 640px;
+}
+.hud-confirm-label { font-family: var(--font-mono-hud); font-size: 11px; letter-spacing: 3px; color: var(--hud-amber); }
+.hud-confirm-desc { font-size: 14px; color: var(--hud-amber-lt); }
+.hud-confirm-btns { display: flex; gap: 10px; }
+.hud-btn-sim {
+  background: rgba(53,226,255,.15);
+  border: 1px solid var(--hud-cyan);
+  color: var(--hud-cyan-lt); padding: 7px 16px;
+  font-family: var(--font-mono-hud); font-size: 12px;
+  letter-spacing: 2px; cursor: pointer;
+}
+.hud-btn-nao {
+  background: none; border: 1px solid var(--hud-text-dim);
+  color: var(--hud-text-dim); padding: 7px 16px;
+  font-family: var(--font-mono-hud); font-size: 12px;
+  letter-spacing: 2px; cursor: pointer;
+}
+
+.hud-input-row {
+  width: 100%; max-width: 640px;
+  display: flex; gap: 10px; align-items: center;
+  margin-top: 10px; flex-shrink: 0;
+}
+.hud-input {
+  flex: 1;
+  background: rgba(2,25,38,.7);
+  border: 1px solid rgba(53,226,255,.35);
+  color: var(--hud-text-lt);
+  font-family: var(--font-hud); font-size: 16px;
+  padding: 13px 16px; outline: none;
+  letter-spacing: .5px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.hud-input:focus { border-color: var(--hud-cyan); box-shadow: 0 0 14px rgba(0,229,255,.25); }
+.hud-input:disabled { opacity: .6; }
+.hud-mic-btn {
+  width: 46px; height: 46px;
+  border: 1px solid rgba(53,226,255,.5);
+  background: rgba(53,226,255,.1);
+  color: var(--hud-cyan-lt);
+  cursor: pointer;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.hud-mic-btn--rec {
+  background: rgba(255,84,112,.2);
+  border-color: var(--hud-red);
+  color: var(--hud-red-lt);
+  animation: blink 1s infinite;
+}
+.hud-send-btn {
+  width: 46px; height: 46px;
+  border: 1px solid var(--hud-cyan);
+  background: rgba(53,226,255,.15);
+  color: var(--hud-cyan-lt);
+  cursor: pointer;
+  display: grid; place-items: center;
+  box-shadow: 0 0 12px rgba(0,229,255,.25);
+  transition: background .15s;
+}
+.hud-send-btn:hover   { background: rgba(53,226,255,.3); }
+.hud-send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---- Tab bar mobile ---- */
+.hud-tabbar { display: none; }
+
+/* ── MOBILE ── */
+@media (max-width: 768px) {
+  .hud-topbar-wrapper { display: none; }
+  .hud-grid-bg, .hud-scanlines, .hud-scanline-beam { display: none; }
+
+  .hud-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    padding: 0;
+    gap: 0;
+    overflow: visible;
+  }
+
+  .hud-col--left,
+  .hud-col--right { display: none; }
+
+  .hud-col--center {
+    height: calc(100dvh - 72px);
+    padding: 0 12px;
+    padding-bottom: 8px;
+  }
+
+  .orbe-container { width: 120px !important; height: 120px !important; }
+  .orbe-j { font-size: 15px !important; }
+
+  .hud-input { border-radius: 24px; }
+  .hud-mic-btn, .hud-send-btn { border-radius: 50%; }
+
+  .hud-bubble--user { border-radius: 14px; }
+  .hud-bubble--assistant { border-radius: 3px 14px 14px 14px; }
+
+  .hud-tabbar {
+    display: grid;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid rgba(53,226,255,.2);
+    background: rgba(1,10,16,.85);
+    backdrop-filter: blur(8px);
+    padding: 8px 0 max(18px, env(safe-area-inset-bottom));
+    z-index: 20;
+  }
+  .hud-tab-btn {
+    background: none; border: none;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 4px;
+    padding: 8px 0; cursor: pointer;
+    font-family: var(--font-hud);
+    font-size: 12px; letter-spacing: 1px;
+    color: var(--hud-text-dim);
+    transition: color .15s;
+  }
+  .hud-tab-btn--ativo { color: var(--hud-cyan); }
 }
