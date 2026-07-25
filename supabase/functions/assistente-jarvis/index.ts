@@ -30,28 +30,39 @@ function espacoIdDoToken(req: Request): string | null {
 // Fases de ATIVIDADE (discovery/refinamento/downstream/entregue) são
 // diferentes das fases de PROJETO (discovery/construcao/lancamento/
 // operacao/pausado/encerrado) — criar_atividade usa o enum de atividade.
-// lancamentos são organizados por conta (corrente/cartao), não por
-// categoria — categoria é opcional, só serve pro resumo depois.
+// lancamentos: `meio` (cartao/pix/debito/dinheiro/ted) é a fonte da
+// verdade sobre como foi pago — `conta` (corrente/cartao) é derivada
+// dele automaticamente em executarFerramenta, nunca vem do modelo.
+// categoria_id é obrigatório (inferido pelo modelo, com fallback
+// server-side em inferirCategoria) desde o bug do lançamento "Milky
+// Moo" que ficou com meio e categoria nulos.
 // =====================================================
 const TOOLS = [
   {
     name: 'criar_lancamento',
-    description: 'Cria um lançamento financeiro numa conta (corrente ou cartão de crédito) — como lançar num extrato. Passa por confirmação antes de executar.',
+    description: `Cria um lançamento financeiro — como lançar num extrato. Passa por confirmação antes de executar.
+REGRA CRÍTICA: "meio" é obrigatório. Se o Felipe não disser onde/como pagou, PERGUNTE antes de chamar esta ferramenta — "Pagou no cartão, PIX ou dinheiro?" — nunca chame com meio adivinhado ou vazio.
+categoria_id também é obrigatório: infira pelo nome do estabelecimento/descrição (ex: "Milky Moo" → Alimentação). Se o valor for alto (>R$100) e a categoria não for óbvia, confirme antes: "Vou lançar como Alimentação — correto?".
+Lógica de fatura do cartão: toda compra no cartão entra na fatura do mês SEGUINTE ao da compra (fecha no fim do mês corrente, vence dia 06 do mês seguinte à compra+1). Ex: compra em julho → fatura de agosto, vence 06/08. Isso é sempre assim, não é uma regra só deste mês.`,
     input_schema: {
       type: 'object',
       properties: {
-        descricao: { type: 'string' },
+        descricao: { type: 'string', description: 'Descrição clara do gasto. Ex: "Milky Moo — Milk-shake"' },
         valor: { type: 'number', description: 'Negativo=gasto, positivo=receita' },
-        conta: { type: 'string', enum: ['corrente', 'cartao'], description: 'Padrão corrente; use cartao se o Felipe mencionar cartão/crédito.' },
-        categoria_id: { type: 'number', description: 'Opcional, só se mencionado naturalmente. 1=Filha,2=Moradia,3=Financiamento,4=Mercado,5=Transporte,6=Saúde,7=Lazer,8=Projetos,9=Receita,10=Outros' },
-        data: { type: 'string', description: 'YYYY-MM-DD' },
+        categoria_id: { type: 'number', description: '1=Filha,2=Moradia,3=Financiamento,4=Mercado,5=Transporte,6=Saúde,7=Lazer,8=Projetos,9=Receita,10=Outros,11=Alimentação,12=Vestuário,13=Assinaturas,14=Educação,15=Energia/Água,16=Condomínio,17=Telefone,18=Cartão de Crédito,19=Impostos/IOF,20=Transferências' },
+        data: { type: 'string', description: 'YYYY-MM-DD. Usar a data de hoje (ver AGORA no contexto) se o Felipe não informar.' },
+        meio: {
+          type: 'string',
+          enum: ['cartao', 'pix', 'debito', 'dinheiro', 'ted'],
+          description: 'OBRIGATÓRIO — perguntar ao Felipe se não estiver claro pela frase. cartao=cartão de crédito, pix=PIX da conta corrente, debito=débito automático, dinheiro=espécie, ted=transferência.',
+        },
       },
-      required: ['descricao', 'valor', 'data'],
+      required: ['descricao', 'valor', 'categoria_id', 'data', 'meio'],
     },
   },
   {
     name: 'criar_lancamentos_lote',
-    description: 'Cria múltiplos lançamentos de uma vez. Passa por confirmação antes de executar.',
+    description: 'Cria múltiplos lançamentos de uma vez. Mesmas regras de criar_lancamento (meio e categoria_id obrigatórios em cada item — pergunte o meio antes se não for óbvio). Passa por confirmação antes de executar.',
     input_schema: {
       type: 'object',
       properties: {
@@ -62,11 +73,11 @@ const TOOLS = [
             properties: {
               descricao: { type: 'string' },
               valor: { type: 'number' },
-              conta: { type: 'string', enum: ['corrente', 'cartao'] },
-              categoria_id: { type: 'number' },
+              categoria_id: { type: 'number', description: 'Ver lista completa em criar_lancamento.' },
               data: { type: 'string' },
+              meio: { type: 'string', enum: ['cartao', 'pix', 'debito', 'dinheiro', 'ted'] },
             },
-            required: ['descricao', 'valor', 'data'],
+            required: ['descricao', 'valor', 'categoria_id', 'data', 'meio'],
           },
         },
       },
@@ -466,9 +477,15 @@ REGRAS OPERACIONAIS INEGOCIÁVEIS
    tela de confirmação automática antes de executar — isso é tratado pelo app, você
    não precisa "esperar" nem perguntar de novo. Ao usá-las, inclua um texto curto
    explicando o que está prestes a fazer.
-4. NÃO pergunte a categoria ao lançar no financeiro — é opcional, só entra se
-   mencionada naturalmente. Pergunte a conta (corrente/cartão) só se não der pra
-   inferir da frase.
+4. Ao criar um lançamento (criar_lancamento/criar_lancamentos_lote): "meio" de
+   pagamento é OBRIGATÓRIO — se o Felipe não disser onde/como pagou, pergunte
+   ANTES de chamar a ferramenta ("Pagou no cartão, PIX ou dinheiro?"), nunca
+   adivinhe. "categoria_id" também é obrigatório, mas infira pelo nome do
+   estabelecimento/descrição sem perguntar — só confirme se o valor for alto
+   (>R$100) e a categoria não for óbvia ("Vou lançar como Alimentação —
+   correto?"). Depois de registrar, sempre diga em qual fatura a compra cai
+   (cartão) ou que foi direto na conta corrente (outros meios) — a ferramenta
+   já devolve esse texto pronto, é só repassar.
 5. MÁXIMO 1 confronto por sessão — baseado em dado real, com ação mínima proposta.
 6. MÁXIMO 3 sugestões por resposta.
 7. Ao trocar de assunto no meio da conversa: "Mudando para [tema]."
@@ -611,8 +628,8 @@ function gerarDescricao(tool: string, input: any, idioma: 'pt' | 'en'): string {
   switch (tool) {
     case 'criar_lancamento':
       return en
-        ? `Create "${input.descricao}" (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) on ${input.data}, ${input.conta === 'cartao' ? 'credit card' : 'checking'} account.`
-        : `Criar "${input.descricao}" (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) em ${input.data}, conta ${input.conta === 'cartao' ? 'cartão' : 'corrente'}.`
+        ? `Create "${input.descricao}" (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) on ${input.data}, via ${input.meio || '?'}.`
+        : `Criar "${input.descricao}" (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}) em ${input.data}, via ${input.meio || '?'}.`
     case 'criar_lancamentos_lote': {
       const total = input.lancamentos.reduce((s: number, l: any) => s + Math.abs(l.valor), 0)
       return en
@@ -636,6 +653,41 @@ function gerarDescricao(tool: string, input: any, idioma: 'pt' | 'en'): string {
   }
 }
 
+// Fallback server-side pra categoria — o modelo já deve inferir isso
+// (categoria_id é obrigatório no schema), mas se por algum motivo
+// chegar nulo/0 aqui, isso evita repetir o bug do lançamento "Milky
+// Moo" (categoria_id ficou null porque nada garantia um valor).
+function inferirCategoria(descricao: string): number {
+  const d = descricao.toLowerCase()
+  if (/restauran|lanch|sushi|pizza|hambur|milk|sorvete|café|padaria|ifood|rappi|uber eats/.test(d)) return 11 // Alimentação
+  if (/posto|combustív|uber|99|taxi|parking|estacion|pedágio|seguro auto/.test(d)) return 5 // Transporte
+  if (/farmácia|droga|remédio|médico|consulta|plano|saúde|hospital/.test(d)) return 6 // Saúde
+  if (/netflix|spotify|apple|google|amazon prime|disney|youtube|assinatura/.test(d)) return 13 // Assinaturas
+  if (/mercado|supermerc|atacad|hortifrut|açougue|coop|carrefour|extra/.test(d)) return 4 // Mercado
+  if (/roupa|calçado|tênis|camisa|tng|centauro|renner|c&a|riachuelo/.test(d)) return 12 // Vestuário
+  if (/escola|colégio|faculdade|curso|livro|papelaria/.test(d)) return 14 // Educação
+  if (/cinema|teatro|show|ingress|lazer|hobby|jogo/.test(d)) return 7 // Lazer
+  if (/energia|luz|água|sabesp|enel/.test(d)) return 15 // Energia/Água
+  if (/condomínio|condominio/.test(d)) return 16 // Condomínio
+  if (/telefone|internet|claro|vivo|tim|net/.test(d)) return 17 // Telefone
+  return 10 // Outros
+}
+
+// Toda compra no cartão fecha no fim do mês da compra e entra na
+// fatura do mês seguinte, vencimento sempre dia 06 — regra fixa, não
+// depende de qual mês é "agora" (por isso nada de data hardcoded aqui).
+const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+const MESES_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+function qualFatura(dataCompraStr: string, idioma: 'pt' | 'en' = 'pt'): string {
+  const [ano, mes] = dataCompraStr.split('-').map(Number)
+  let mesFatura = mes + 1
+  let anoFatura = ano
+  if (mesFatura > 12) { mesFatura = 1; anoFatura++ }
+  const nomeMes = idioma === 'en' ? MESES_EN[mesFatura - 1] : MESES_PT[mesFatura - 1]
+  const vencStr = `06/${String(mesFatura).padStart(2, '0')}${anoFatura !== ano ? `/${anoFatura}` : ''}`
+  return idioma === 'en' ? `Goes on the ${nomeMes} invoice (due ${vencStr}).` : `Entra na fatura de ${nomeMes} (vence ${vencStr}).`
+}
+
 // =====================================================
 // EXECUÇÃO REAL DAS FERRAMENTAS NO SUPABASE
 // =====================================================
@@ -643,28 +695,48 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
   const en = idioma === 'en'
   switch (nome) {
     case 'criar_lancamento': {
+      // Guardrail — o schema já obriga meio, mas se por algum motivo
+      // chegar vazio aqui, bloqueia em vez de repetir o bug do "Milky
+      // Moo" (lançamento salvo com meio/categoria nulos).
+      if (!input.meio) {
+        return en ? 'ERROR: payment method not informed. Ask Felipe before creating.' : 'ERRO: meio de pagamento não informado. Pergunte ao Felipe antes de criar.'
+      }
+      const categoriaId = input.categoria_id || inferirCategoria(input.descricao)
+      const conta = input.meio === 'cartao' ? 'cartao' : 'corrente'
+
       const { error } = await supabase.from('lancamentos').insert({
         espaco_id: espacoId,
         descricao: input.descricao,
         valor: input.valor,
-        conta: input.conta === 'cartao' ? 'cartao' : 'corrente',
-        categoria_id: input.categoria_id || null,
+        categoria_id: categoriaId,
         data: input.data,
+        meio: input.meio,
+        conta,
       })
       if (error) throw new Error(error.message)
+
+      const infoFatura = conta === 'cartao'
+        ? qualFatura(input.data, idioma)
+        : (en ? 'Goes straight to the checking account.' : 'Vai direto na conta corrente.')
+      const valorTxt = `${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}`
       return en
-        ? `Entry created: ${input.descricao} (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}).`
-        : `Lançamento criado: ${input.descricao} (${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}).`
+        ? `Entry created: ${input.descricao} (${valorTxt}) via ${input.meio}. ${infoFatura}`
+        : `Lançamento criado: ${input.descricao} (${valorTxt}) no ${input.meio}. ${infoFatura}`
     }
 
     case 'criar_lancamentos_lote': {
+      const semMeio = input.lancamentos.find((l: any) => !l.meio)
+      if (semMeio) {
+        return en ? 'ERROR: payment method not informed for one or more entries. Ask Felipe before creating.' : 'ERRO: meio de pagamento não informado em um ou mais lançamentos. Pergunte ao Felipe antes de criar.'
+      }
       const itens = input.lancamentos.map((l: any) => ({
         espaco_id: espacoId,
         descricao: l.descricao,
         valor: l.valor,
-        conta: l.conta === 'cartao' ? 'cartao' : 'corrente',
-        categoria_id: l.categoria_id || null,
+        categoria_id: l.categoria_id || inferirCategoria(l.descricao),
         data: l.data,
+        meio: l.meio,
+        conta: l.meio === 'cartao' ? 'cartao' : 'corrente',
       }))
       const { error } = await supabase.from('lancamentos').insert(itens)
       if (error) throw new Error(error.message)
