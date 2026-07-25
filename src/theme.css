@@ -1582,7 +1582,6 @@ a.link-acao { text-decoration-line: underline; }
 .hud-root {
   position: fixed;
   inset: 0;
-  height: 100dvh;
   background: var(--hud-bg-radial);
   font-family: var(--font-hud);
   color: var(--hud-text);
@@ -1768,7 +1767,6 @@ a.link-acao { text-decoration-line: underline; }
 /* ---- Abas HUD (Vida/Projetos/Financeiro) ---- */
 .hud-aba-page {
   position: fixed; inset: 0;
-  height: 100dvh;
   overflow-y: auto;
   background: var(--hud-bg-radial);
   font-family: var(--font-hud);
@@ -1853,7 +1851,14 @@ a.link-acao { text-decoration-line: underline; }
   .hud-col--right { display: none; }
 
   .hud-col--center {
-    height: calc(100dvh - var(--hud-tabbar-content-h) - env(safe-area-inset-bottom));
+    /* Sem altura calculada à mão: .hud-tabbar dentro de .hud-root virou
+       item de flex normal (ver abaixo), então o grid/flex já sobra
+       exatamente o espaço certo pra esta coluna sozinho — nenhuma
+       chance de descompassar da altura real da barra de novo (era
+       exatamente esse descompasso, calc() vs altura renderizada de
+       verdade, que cortava o rodapé do chat e sobrava espaço embaixo
+       da barra no PWA em modo standalone). */
+    min-height: 0;
     padding: 0 12px;
     padding-bottom: 8px;
   }
@@ -1890,6 +1895,20 @@ a.link-acao { text-decoration-line: underline; }
     min-height: var(--hud-tabbar-content-h);
     padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
     z-index: 20;
+  }
+
+  /* Dentro de .hud-root (JarvisHome) a tela inteira já é fixed/travada
+     na viewport e só o chat rola por dentro — não precisa (e não deve)
+     a tab bar ser fixed de novo aqui. Vira item normal do flex column,
+     último da coluna: o browser reserva o espaço real dela sozinho,
+     sem depender de nenhuma conta em px que possa descompassar (era
+     essa conta que, em standalone/PWA no iOS, ficava errada e cortava
+     o rodapé do chat). Em .hud-aba-page (Vida/Projetos/Financeiro) a
+     página rola inteira, então ali a barra PRECISA continuar fixed
+     pra não rolar junto com o conteúdo — só este caso muda. */
+  .hud-root > .hud-tabbar {
+    position: static;
+    flex-shrink: 0;
   }
   .hud-tab-btn {
     background: none; border: none;
