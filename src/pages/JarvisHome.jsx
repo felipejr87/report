@@ -6,7 +6,7 @@ import { useToast } from '../hooks/useToast'
 import { useIdioma } from '../hooks/useIdioma'
 import { useTexto } from '../lib/i18n'
 import { supabaseEspaco, urlFuncao } from '../lib/supabase'
-import { horaAtualBRT, diaSemanaAtualBRT, formatarHoraBRT } from '../lib/tempo'
+import { horaAtualBRT, formatarHoraBRT } from '../lib/tempo'
 import { useVoz } from '../hooks/useVoz'
 import { useJarvisVoz } from '../hooks/useJarvisVoz'
 import BootSequence from '../components/hud/BootSequence'
@@ -40,62 +40,6 @@ function renderMsg(texto) {
     .replace(/\n/g, '<br>')
 }
 
-// Frases curtas, tom J.A.R.V.I.S. — diretas, sem clichê de pôster
-// motivacional. Uma por período, sorteada a cada nova conversa.
-const FRASES_MOTIVACIONAIS = {
-  pt: {
-    manha: [
-      'O dia começa agora — o resto é execução.',
-      'Prioridade clara vale mais que agenda cheia.',
-      'Um problema resolvido hoje não some, mas para de crescer.',
-      'Menos abas abertas, mais coisa entregue.',
-      'Disciplina de hoje é o resultado de outubro.',
-    ],
-    tarde: [
-      'Metade do caminho andado. Segue no ritmo.',
-      'Ajusta a rota, não precisa recomeçar.',
-      'O que já rendeu, rendeu. Próximo passo.',
-      'Sem pressa, sem parar.',
-      'Tarde de continuar, não de justificar.',
-    ],
-    noite: [
-      'O dia não precisa ser perfeito pra ter valido.',
-      'Fechar bem hoje abre bem amanhã.',
-      'Descansar é parte do plano, não desvio dele.',
-      'O que não foi feito espera. Você, não.',
-      'Silêncio agora, retomada amanhã.',
-    ],
-  },
-  en: {
-    manha: [
-      'The day starts now — the rest is execution.',
-      'A clear priority beats a full calendar.',
-      "A problem solved today stops growing, even if it doesn't vanish.",
-      'Fewer open tabs, more delivered work.',
-      "Today's discipline is October's result.",
-    ],
-    tarde: [
-      'Halfway there. Keep the pace.',
-      'Adjust course, no need to restart.',
-      "What's done is done. Next step.",
-      'No rush, no stopping.',
-      'An afternoon for continuing, not justifying.',
-    ],
-    noite: [
-      "The day doesn't need to be perfect to have counted.",
-      'Closing well today opens well tomorrow.',
-      'Resting is part of the plan, not a detour from it.',
-      "What wasn't done will wait. You won't.",
-      'Quiet now, resume tomorrow.',
-    ],
-  },
-}
-
-function frase(idioma, periodo) {
-  const opcoes = FRASES_MOTIVACIONAIS[idioma]?.[periodo] || FRASES_MOTIVACIONAIS.pt[periodo]
-  return opcoes[Math.floor(Math.random() * opcoes.length)]
-}
-
 const SAUDACAO_PALAVRA = {
   pt: { manha: 'Bom dia', tarde: 'Boa tarde', noite: 'Boa noite' },
   en: { manha: 'Good morning', tarde: 'Good afternoon', noite: 'Good evening' },
@@ -110,40 +54,12 @@ function periodoDe(saudacao) {
   return 'noite'
 }
 
-function horaEvento(iso) {
-  return formatarHoraBRT(iso)
-}
-
-// Fragmentos de texto do digest, por idioma — usados só dentro de
+// Fragmentos de texto da saudação, por idioma — usados só dentro de
 // montarSaudacao, então ficam colados nela em vez de ir pro i18n.js
 // (que é só pras strings estáticas de botão/label).
 const TEXTO_SAUDACAO = {
-  pt: {
-    agenda: (lista) => `Agenda: ${lista}.`,
-    agendaLivre: 'Agenda livre hoje.',
-    prioridade: (nome) => `Prioridade: "${nome}" vence em breve.`,
-    parada: (nome) => `"${nome}" está parada há dias — vale um empurrão.`,
-    proximoCompromisso: (titulo, hora) => `Próximo compromisso: ${titulo} às ${hora}.`,
-    habitosPendentes: (lista) => `Ainda sem marcar: ${lista}.`,
-    amanha: (nome) => `Amanhã: "${nome}" tem prioridade.`,
-    paradaAtencao: (nome) => `"${nome}" pede atenção antes que vire urgência.`,
-    oQuePrecisa: 'O que precisa?',
-    encerramento: 'Como fecha o dia — tudo em dia ou ficou algo solto pra amanhã?',
-    chuva: (pct) => ` — ${pct}% de chance de chuva`,
-  },
-  en: {
-    agenda: (lista) => `Schedule: ${lista}.`,
-    agendaLivre: 'Schedule is clear today.',
-    prioridade: (nome) => `Priority: "${nome}" is due soon.`,
-    parada: (nome) => `"${nome}" has been stalled for days — worth a push.`,
-    proximoCompromisso: (titulo, hora) => `Next up: ${titulo} at ${hora}.`,
-    habitosPendentes: (lista) => `Still unchecked: ${lista}.`,
-    amanha: (nome) => `Tomorrow: "${nome}" takes priority.`,
-    paradaAtencao: (nome) => `"${nome}" needs attention before it becomes urgent.`,
-    oQuePrecisa: 'What do you need?',
-    encerramento: 'How did the day close — all settled or something left loose for tomorrow?',
-    chuva: (pct) => ` — ${pct}% chance of rain`,
-  },
+  pt: { oQuePrecisa: 'O que precisa?', encerramento: 'Como fecha o dia?' },
+  en: { oQuePrecisa: 'What do you need?', encerramento: 'How did the day close?' },
 }
 
 // Textos dos cards de sugestão proativa — assim como TEXTO_SAUDACAO,
@@ -161,52 +77,23 @@ const TEXTO_SUGESTAO = {
   },
 }
 
-// Constrói a saudação inicial usando o briefing (clima/agenda/atividades)
-// já carregado — conteúdo muda de peso conforme o período do dia:
-// manhã = digest completo, tarde = leve, noite = sugestões + fechamento.
+// Saudação inicial — curta de propósito. O digest completo (clima,
+// agenda, hábitos pendentes, prioridades) já vive nos painéis
+// dedicados (coluna esquerda no desktop, .hud-briefing-mobile no
+// celular) — repetir tudo de novo na bolha de chat só empurrava o
+// input pra fora da tela no mobile (a mensagem sozinha chegava a
+// ocupar quase metade da tela em telefones menores).
 function montarSaudacao(dados, idioma) {
   const lang = idioma === 'en' ? 'en' : 'pt'
   const s = TEXTO_SAUDACAO[lang]
-  const agoraFallback = horaAtualBRT()
+  const periodo = dados ? periodoDe(dados.saudacao) : (() => {
+    const h = horaAtualBRT()
+    return h < 12 ? 'manha' : h < 18 ? 'tarde' : 'noite'
+  })()
+  const hora = dados?.hora || formatarHoraBRT(new Date().toISOString())
+  const fechamento = periodo === 'noite' ? s.encerramento : s.oQuePrecisa
 
-  if (!dados) {
-    const periodoFallback = agoraFallback < 12 ? 'manha' : agoraFallback < 18 ? 'tarde' : 'noite'
-    return `${SAUDACAO_PALAVRA[lang][periodoFallback]}, Felipe. ${s.oQuePrecisa}`
-  }
-
-  const periodo = periodoDe(dados.saudacao)
-  const dia = diaSemanaAtualBRT(lang)
-  const diaCap = dia.charAt(0).toUpperCase() + dia.slice(1)
-  const linhas = [`${SAUDACAO_PALAVRA[lang][periodo]}, Felipe. ${diaCap}, ${dados.hora}.`]
-
-  if (periodo === 'manha') {
-    if (dados.tempo) {
-      const chuva = dados.tempo.probChuva > 40 ? s.chuva(dados.tempo.probChuva) : ''
-      linhas.push(`${dados.tempo.temp}°C, ${dados.tempo.descricao}${chuva}.`)
-    }
-    linhas.push(
-      dados.eventosHoje.length > 0
-        ? s.agenda(dados.eventosHoje.slice(0, 3).map((e) => `${horaEvento(e.inicio)} ${e.titulo}`).join('; '))
-        : s.agendaLivre
-    )
-    if (dados.urgentes.length > 0) linhas.push(s.prioridade(dados.urgentes[0].nome))
-    else if (dados.paradas.length > 0) linhas.push(s.parada(dados.paradas[0].nome))
-    linhas.push(frase(lang, 'manha'))
-    linhas.push(s.oQuePrecisa)
-  } else if (periodo === 'tarde') {
-    const proximo = dados.eventosHoje.find((e) => new Date(e.inicio) > new Date())
-    if (proximo) linhas.push(s.proximoCompromisso(proximo.titulo, horaEvento(proximo.inicio)))
-    linhas.push(frase(lang, 'tarde'))
-    linhas.push(s.oQuePrecisa)
-  } else {
-    if (dados.habitosPendentes.length > 0) linhas.push(s.habitosPendentes(dados.habitosPendentes.slice(0, 2).map((h) => h.nome).join(', ')))
-    if (dados.urgentes.length > 0) linhas.push(s.amanha(dados.urgentes[0].nome))
-    if (dados.paradas.length > 0) linhas.push(s.paradaAtencao(dados.paradas[0].nome))
-    linhas.push(frase(lang, 'noite'))
-    linhas.push(s.encerramento)
-  }
-
-  return linhas.join('\n')
+  return `${SAUDACAO_PALAVRA[lang][periodo]}, Felipe. ${hora}. ${fechamento}`
 }
 
 export default function JarvisHome() {
@@ -534,6 +421,57 @@ export default function JarvisHome() {
   const orbeStatus = escutando ? 'ouvindo' : carregandoAudio ? 'processando' : falando ? 'falando' : 'aguardando'
   const localeData = idioma === 'en' ? 'en-US' : 'pt-BR'
 
+  // Histórico/voz/notif/nova conversa — renderizados duas vezes: com
+  // rótulo dentro de .hud-chat-controles (linha própria, desktop) e só
+  // ícone dentro de .hud-bm-controles (mesma linha do clima, mobile —
+  // uma linha própria pros controles era o que empurrava o chat/input
+  // pra fora da tela em telas menores). Mesmos handlers, mesmo estado.
+  function renderControles(compacto) {
+    const historico = (
+      <button type="button" className="hud-ctrl-btn" onClick={() => setMostrarHistorico((v) => !v)} title={t('historico')} aria-label={t('historico')}>
+        <History size={13} /> {!compacto && t('historico')}
+      </button>
+    )
+    const outros = (
+      <>
+        {falaSuportada && (
+          <button
+            type="button"
+            className="hud-ctrl-btn"
+            data-ativo={vozAutomatica}
+            onClick={toggleVozAutomatica}
+            title={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
+            aria-label={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
+          >
+            {carregandoAudio ? <Loader2 size={13} className="icone-girando" /> : falando ? <Volume2 size={13} /> : vozAutomatica ? <Volume1 size={13} /> : <VolumeX size={13} />}
+          </button>
+        )}
+        {pushSuportado && (
+          <button
+            type="button"
+            className="hud-ctrl-btn"
+            data-ativo={notifAtivo}
+            onClick={alternarNotificacoes}
+            disabled={notifCarregando}
+            title={notifAtivo ? t('desativar_notif') : t('ativar_notif')}
+            aria-label={notifAtivo ? t('desativar_notif') : t('ativar_notif')}
+          >
+            {notifAtivo ? <Bell size={13} /> : <BellOff size={13} />}
+          </button>
+        )}
+        <button type="button" className="hud-ctrl-btn" onClick={novaConversa} title={t('nova_conversa')} aria-label={t('nova_conversa')}>
+          <Plus size={13} /> {!compacto && t('nova_conversa')}
+        </button>
+      </>
+    )
+    // Desktop mantém "histórico" isolado à esquerda e o resto agrupado
+    // à direita (.hud-chat-controles usa justify-content:space-between,
+    // e o agrupamento é o que separa esses dois blocos). No mobile isso
+    // não importa — é só um cluster compacto de ícones ao lado do clima.
+    if (compacto) return <>{historico}{outros}</>
+    return <>{historico}<div className="hud-chat-controles-grupo">{outros}</div></>
+  }
+
   return (
     <>
       {!bootDone && <BootSequence onDone={() => setBootDone(true)} codigo={sessao.espaco.codigo} idioma={idioma} />}
@@ -597,14 +535,17 @@ export default function JarvisHome() {
 
             {/* Briefing compacto — só visível no mobile (colunas
                 esquerda/direita somem abaixo de 1024px, então o
-                briefing completo vai junto; isso cobre o vazio). */}
+                briefing completo vai junto; isso cobre o vazio). Os
+                controles (histórico/voz/notif/nova) entram na mesma
+                linha do clima aqui — uma linha própria pra eles era o
+                que empurrava o chat/input pra fora da tela. */}
             <div className="hud-briefing-mobile">
-              {briefing?.tempo && (
-                <div className="hud-briefing-mobile-clima">
-                  {briefing.tempo.temp}°C · {briefing.tempo.descricao}
-                  {briefing.tempo.probChuva > 40 && ` · CHUVA ${briefing.tempo.probChuva}%`}
-                </div>
-              )}
+              <div className="hud-bm-top">
+                <span className="hud-briefing-mobile-clima">
+                  {briefing?.tempo && `${briefing.tempo.temp}°C · ${briefing.tempo.descricao}${briefing.tempo.probChuva > 40 ? ` · CHUVA ${briefing.tempo.probChuva}%` : ''}`}
+                </span>
+                <div className="hud-bm-controles">{renderControles(true)}</div>
+              </div>
               {briefing?.eventosHoje?.[0] && (
                 <div className="hud-briefing-mobile-evento">
                   <span className="hud-briefing-mobile-hora">
@@ -621,41 +562,7 @@ export default function JarvisHome() {
               )}
             </div>
 
-            <div className="hud-chat-controles">
-              <button type="button" className="hud-ctrl-btn" onClick={() => setMostrarHistorico((v) => !v)}>
-                <History size={13} /> {t('historico')}
-              </button>
-              <div className="hud-chat-controles-grupo">
-                {falaSuportada && (
-                  <button
-                    type="button"
-                    className="hud-ctrl-btn"
-                    data-ativo={vozAutomatica}
-                    onClick={toggleVozAutomatica}
-                    title={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
-                    aria-label={vozAutomatica ? t('desativar_voz') : t('ativar_voz')}
-                  >
-                    {carregandoAudio ? <Loader2 size={13} className="icone-girando" /> : falando ? <Volume2 size={13} /> : vozAutomatica ? <Volume1 size={13} /> : <VolumeX size={13} />}
-                  </button>
-                )}
-                {pushSuportado && (
-                  <button
-                    type="button"
-                    className="hud-ctrl-btn"
-                    data-ativo={notifAtivo}
-                    onClick={alternarNotificacoes}
-                    disabled={notifCarregando}
-                    title={notifAtivo ? t('desativar_notif') : t('ativar_notif')}
-                    aria-label={notifAtivo ? t('desativar_notif') : t('ativar_notif')}
-                  >
-                    {notifAtivo ? <Bell size={13} /> : <BellOff size={13} />}
-                  </button>
-                )}
-                <button type="button" className="hud-ctrl-btn" onClick={novaConversa}>
-                  <Plus size={13} /> {t('nova_conversa')}
-                </button>
-              </div>
-            </div>
+            <div className="hud-chat-controles">{renderControles(false)}</div>
 
             {mostrarHistorico && (
               <div className="hud-historico-sidebar">

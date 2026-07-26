@@ -1840,6 +1840,11 @@ a.link-acao { text-decoration-line: underline; }
   .hud-topbar-wrapper { display: none; }
   .hud-grid-bg, .hud-scanlines, .hud-scanline-beam { display: none; }
 
+  /* Nada mais cobre o notch/Dynamic Island no mobile (a TopBar some
+     inteira aqui) — sem isso o orbe/briefing nasciam por baixo da
+     safe-area de cima e ficavam cortados. */
+  .hud-root { padding-top: env(safe-area-inset-top); }
+
   .hud-main {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
@@ -1865,19 +1870,38 @@ a.link-acao { text-decoration-line: underline; }
 
   .hud-chat { -webkit-overflow-scrolling: touch; }
 
+  /* Controles (histórico/voz/notif/nova) saem da linha própria deles
+     (que empurrava o chat pra baixo) e entram na mesma linha do clima,
+     dentro de .hud-briefing-mobile — ver .hud-bm-top logo abaixo. Os
+     mesmos botões continuam existindo em .hud-chat-controles pro
+     desktop, só somem daqui. */
+  .hud-chat-controles { display: none; }
+
   .hud-briefing-mobile {
     display: flex;
     flex-direction: column;
     gap: 3px;
-    padding: 6px 4px;
+    padding: 6px 12px;
     border-bottom: 1px solid rgba(53,226,255,.12);
     font-family: var(--font-mono-hud);
     font-size: 11px;
     flex-shrink: 0;
   }
+  .hud-bm-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .hud-bm-controles { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .hud-bm-controles .hud-ctrl-btn { padding: 6px; }
 
-  .orbe-container { width: 120px !important; height: 120px !important; }
-  .orbe-j { font-size: 15px !important; }
+  .orbe-wrapper { flex-shrink: 0; padding: 6px 0 2px; }
+  .orbe-container { width: 130px !important; height: 130px !important; }
+  .orbe-j { font-size: 16px !important; }
+  .orbe-status { font-size: 10px !important; letter-spacing: 4px !important; margin: 8px 0 3px !important; }
+  .orbe-wave { height: 22px !important; margin-bottom: 2px !important; }
 
   .hud-input { border-radius: 24px; }
   .hud-mic-btn, .hud-send-btn { border-radius: 50%; }
