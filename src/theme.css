@@ -1878,6 +1878,14 @@ a.link-acao { text-decoration-line: underline; }
   .hud-chat-controles { display: none; }
 
   .hud-briefing-mobile {
+    /* .hud-col--center tem align-items:center (certo pro orbe, que
+       deve ficar centralizado e no tamanho intrínseco) — mas sem
+       width:100% aqui esse mesmo align-items encolhia a barra do
+       clima+controles pro tamanho do conteúdo e centralizava ela,
+       em vez de esticar de ponta a ponta da tela. Os controles
+       (histórico/voz/notif/nova) ficavam então espremidos perto do
+       meio da tela em vez de alinhados na borda direita. */
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 3px;
