@@ -114,7 +114,7 @@ Lógica de fatura do cartão: toda compra no cartão entra na fatura do mês SEG
     input_schema: {
       type: 'object',
       properties: {
-        campo: { type: 'string', description: 'Campo do perfil: peso_altura | nome_filha | escola_filha | parcelamento_max | horario_treino | medico_regular | contato_chave | saude | rotina | preferencia' },
+        campo: { type: 'string', description: 'Campo do perfil: peso_altura | nome_filha | escola_filha | parcelamento_max | horario_treino | medico_regular | contato_chave | saude | rotina | preferencia | lembrete' },
         valor: { type: 'object', description: 'Dados a salvar. Ex: {"peso": 82, "altura": 178} ou {"nome": "Ana"} ou {"nome": "Matheus", "contexto": "IBM", "tipo": "profissional"}' },
         marcar_pergunta_respondida: { type: 'boolean', description: 'true se isso responde uma pergunta pendente de aprendizado ativo' },
       },
@@ -243,6 +243,7 @@ serve(async (req) => {
       { data: proximoEvento },
       { data: urgentes },
       { data: perguntaPendente },
+      { data: ultimaConversa },
     ] = await Promise.all([
       supabase.from('lancamentos').select('valor, categoria_id, conta').eq('espaco_id', espacoId).gte('data', `${mes}-01`),
       supabase.from('dividas').select('nome, saldo_atual, parcela').eq('espaco_id', espacoId).eq('ativa', true),
@@ -257,6 +258,11 @@ serve(async (req) => {
       supabase.from('atividades').select('nome, data_fim').eq('espaco_id', espacoId).neq('fase', 'entregue').not('data_fim', 'is', null).lte('data_fim', new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0]).order('data_fim').limit(3),
       // Aprendizado ativo — próxima pergunta de perfil ainda não respondida.
       supabase.from('jarvis_perguntas_pendentes').select('id, campo, pergunta, contexto').eq('espaco_id', espacoId).eq('respondida', false).order('prioridade', { ascending: true }).limit(1).maybeSingle(),
+      // Conversa mais recente — só é útil como "conversa anterior" na
+      // primeira mensagem de uma conversa nova (a conversa atual só é
+      // criada/persistida no banco DEPOIS que esta resposta volta pro
+      // front, então nesse momento isso ainda aponta pra anterior).
+      supabase.from('conversas').select('titulo, atualizado_em').eq('espaco_id', espacoId).order('atualizado_em', { ascending: false }).limit(1).maybeSingle(),
     ])
 
     // Saldo real da conta e fatura aberta NÃO vêm da soma dos
@@ -303,6 +309,35 @@ serve(async (req) => {
     )
     const devePergunta = !!perguntaPendente && isPrimeirasMensagens && !isAssuntoUrgente
 
+    // Pendências casuais salvas via salvar_aprendizado(campo:'lembrete') —
+    // ver seção "APRENDIZADO SOBRE O FELIPE" no system prompt. Só as dos
+    // últimos 3 dias contam (lembrete velho é ruído, não proatividade).
+    const TRES_DIAS_MS = 3 * 86400000
+    const lembretesRecentes: { valor: any; salvo_em: string }[] = (perfil?.aprendizados || [])
+      .filter((a: any) => a.campo === 'lembrete' && a.salvo_em && Date.now() - new Date(a.salvo_em).getTime() < TRES_DIAS_MS)
+      .sort((a: any, b: any) => new Date(b.salvo_em).getTime() - new Date(a.salvo_em).getTime())
+      .slice(0, 2)
+
+    const ultimaConversaTexto = ultimaConversa
+      ? `"${ultimaConversa.titulo || 'sem título'}" (${Math.round((Date.now() - new Date(ultimaConversa.atualizado_em).getTime()) / 3600000)}h atrás)`
+      : null
+
+    // Proatividade de pendência — mesmo gatilho do aprendizado ativo
+    // (só na primeira mensagem, nunca em cima de assunto urgente), mas
+    // os dois nunca disparam juntos: no máximo UM nudge por abertura de
+    // conversa, senão a resposta vira lista (viola a regra de brevidade).
+    const devePendencia = lembretesRecentes.length > 0 && isPrimeirasMensagens && !isAssuntoUrgente && !devePergunta
+
+    const contextoPendencia = devePendencia ? `
+
+PROATIVIDADE — INSTRUÇÃO IMPORTANTE:
+Antes ou logo no início desta resposta, mencione em UMA frase curta a pendência mais
+recente do Felipe, como retomada natural — não como lembrete formal.
+Pendência: "${lembretesRecentes[0].valor?.texto || JSON.stringify(lembretesRecentes[0].valor)}"
+Exemplo de tom: "Bom dia, Felipe. — ${lembretesRecentes[0].valor?.texto || 'aquilo'} já resolveu?"
+Se ele responder que sim/não/já resolveu, não pergunte de novo na mesma conversa.
+` : ''
+
     const contextoPergunta = devePergunta ? `
 
 APRENDIZADO ATIVO — INSTRUÇÃO IMPORTANTE:
@@ -346,7 +381,9 @@ PROJETOS: ${projetos?.map((p) => `${p.nome} [${p.fase}]`).join(', ') || 'Nenhum'
 OBJETIVOS ATIVOS: ${objetivos?.map((o) => o.descricao).join(' | ') || 'Nenhum'}
 HÁBITOS: ${habitos?.map((h) => h.nome).join(', ') || 'Nenhum'}
 PERFIL: ${perfilCompleto}
-${contextoPergunta}`
+PENDÊNCIAS RECENTES (lembretes casuais, últimos 3 dias): ${lembretesRecentes.length > 0 ? lembretesRecentes.map((l) => l.valor?.texto || JSON.stringify(l.valor)).join(' | ') : 'Nenhuma'}
+${isPrimeirasMensagens && ultimaConversaTexto ? `ÚLTIMA CONVERSA: ${ultimaConversaTexto}` : ''}
+${contextoPergunta}${contextoPendencia}`
 
     // =====================================================
     // SYSTEM PROMPT — PERSONA JARVIS (definitivo)
@@ -375,6 +412,14 @@ TOM — EXEMPLOS PRÁTICOS:
 ✅ "Sr. Felipe, o teto de moradia foi ultrapassado."
 ✅ "Três demandas com prazo esta semana. Nenhuma avançou."
 ✅ [humor seco] "Mais um projeto novo, Felipe? Os seis anteriores agradecem."
+
+CALIBRAÇÃO DE TAMANHO — a maioria das perguntas merece 1-3 linhas, não parágrafos:
+❌ "Bom dia, Felipe. Segunda-feira. Ainda sem marcar: Treino Full Body A/B, Proteína
+~140g. 'Organizar projeto no Jira' pede atenção antes que vire urgência. Como fecha
+o dia — tudo em dia ou ficou algo solto pra amanhã?"
+✅ "Bom dia, Felipe. Segunda. O que precisa?"
+Se a resposta que você ia mandar tem mais de 5 linhas, releia e corte pela metade —
+questão simples pede resposta simples, o resto só cabe se ele pedir mais detalhe.
 
 PARA VOZ: máximo 2 frases. Direto. Sem listas.
 PARA TEXTO: máximo 3 parágrafos. Nunca mais de 3 sugestões por resposta.
@@ -507,6 +552,15 @@ pessoal ("o Matheus da IBM", "William"), salve como contato_chave:
 
 SAÚDE: qualquer sintoma, medicamento ou consulta mencionados → salve em
 saude: { sintoma, desde, data_registro }.
+
+LEMBRETES: quando o Felipe mencionar de passagem uma pendência pessoal ou
+profissional não-financeira ("preciso ligar pro dentista", "tenho que
+responder o Matheus", "vou resolver isso amanhã") sem pedir pra criar uma
+atividade/evento formal, use salvar_aprendizado com campo: "lembrete" e
+valor: { texto: "<a pendência, resumida>" }. Isso alimenta PENDÊNCIAS
+RECENTES no contexto — é o que te permite retomar o assunto sozinho na
+próxima conversa, sem o Felipe ter que repetir. Não confirme "anotei" pra
+isso (ficaria repetitivo) — só registre e siga a conversa.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CONTEXTO EM TEMPO REAL
@@ -715,13 +769,13 @@ async function executarFerramenta(nome: string, input: any, espacoId: string, su
       })
       if (error) throw new Error(error.message)
 
+      // Confirmação curta — descrição/valor/meio já apareceram uma vez no
+      // card de confirmação (gerarDescricao), repetir tudo aqui de novo
+      // era o tipo de verbosidade que a calibração de respostas cortou.
       const infoFatura = conta === 'cartao'
         ? qualFatura(input.data, idioma)
         : (en ? 'Goes straight to the checking account.' : 'Vai direto na conta corrente.')
-      const valorTxt = `${input.valor > 0 ? '+' : ''}R$${Math.abs(input.valor).toFixed(2)}`
-      return en
-        ? `Entry created: ${input.descricao} (${valorTxt}) via ${input.meio}. ${infoFatura}`
-        : `Lançamento criado: ${input.descricao} (${valorTxt}) no ${input.meio}. ${infoFatura}`
+      return en ? `Logged. ${infoFatura}` : `Lançado. ${infoFatura}`
     }
 
     case 'criar_lancamentos_lote': {

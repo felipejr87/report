@@ -8,6 +8,7 @@ import Timeline from './pages/Timeline'
 import Financeiro from './pages/Financeiro'
 import JarvisHome from './pages/JarvisHome'
 import Vida from './pages/Vida'
+import Anotacoes from './pages/Anotacoes'
 import Seguranca from './pages/Seguranca'
 import JarvisRoute from './components/JarvisRoute'
 import { getAudioContext } from './hooks/useVoz'
@@ -43,6 +44,7 @@ export default function App() {
 
       <Route path="/jarvis" element={<JarvisRoute><JarvisHome /></JarvisRoute>} />
       <Route path="/vida" element={<JarvisRoute><Vida /></JarvisRoute>} />
+      <Route path="/anotacoes" element={<JarvisRoute><Anotacoes /></JarvisRoute>} />
       <Route path="/seguranca" element={<JarvisRoute><Seguranca /></JarvisRoute>} />
     </Routes>
   )

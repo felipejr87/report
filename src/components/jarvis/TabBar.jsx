@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Sparkles, Compass, FolderKanban, Wallet } from 'lucide-react'
+import { Sparkles, Compass, FolderKanban, Wallet, FileText } from 'lucide-react'
 import { useTexto } from '../../lib/i18n'
 
 export default function TabBar() {
@@ -10,6 +10,7 @@ export default function TabBar() {
     { to: '/vida', label: t('tab_vida'), Icone: Compass },
     { to: '/projetos', label: t('tab_projetos'), Icone: FolderKanban },
     { to: '/financeiro', label: t('tab_financeiro'), Icone: Wallet },
+    { to: '/anotacoes', label: t('tab_notas'), Icone: FileText },
   ]
 
   return (

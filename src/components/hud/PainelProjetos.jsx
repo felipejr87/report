@@ -6,7 +6,7 @@ const FASE_LABEL = {
   en: { discovery: 'DISCOVERY', refinamento: 'REFINEMENT', downstream: 'DOWNSTREAM', entregue: 'DELIVERED', operacao: 'LIVE' },
 }
 
-export default function PainelProjetos({ cliente, idioma = 'pt' }) {
+export default function PainelProjetos({ cliente, idioma = 'pt', versao = 0 }) {
   const [projetos, setProjetos] = useState([])
   const [atividades, setAtividades] = useState([])
   const [carregando, setCarregando] = useState(true)
@@ -23,7 +23,10 @@ export default function PainelProjetos({ cliente, idioma = 'pt' }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente])
 
-  useEffect(() => { carregar() }, [carregar])
+  // `versao` sobe a cada atividade confirmada via chat — sem isso este
+  // painel só busca dado uma vez no mount e fica desatualizado depois
+  // de uma ação do Jarvis na mesma sessão.
+  useEffect(() => { carregar() }, [carregar, versao])
 
   const labels = FASE_LABEL[idioma] || FASE_LABEL.pt
   const TXT = idioma === 'en'

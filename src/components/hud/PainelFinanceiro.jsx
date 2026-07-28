@@ -11,7 +11,7 @@ import { Eye, EyeOff } from 'lucide-react'
 // reflete o saldo real da conta (diagnóstico do Axis: dava -R$1.678,98
 // contra o real -R$879,27 do extrato Itaú). Fonte agora é
 // jarvis_perfil.preferencias, atualizado manualmente com o dado real.
-export default function PainelFinanceiro({ cliente, espacoId, idioma = 'pt' }) {
+export default function PainelFinanceiro({ cliente, espacoId, idioma = 'pt', versao = 0 }) {
   const [dados, setDados] = useState(null)
   const [saldoVisivel, setSaldoVisivel] = useState(false)
 
@@ -40,7 +40,10 @@ export default function PainelFinanceiro({ cliente, espacoId, idioma = 'pt' }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente, espacoId])
 
-  useEffect(() => { carregar() }, [carregar])
+  // `versao` sobe a cada lançamento/dívida confirmados via chat — sem
+  // isso este painel só busca dado uma vez no mount e fica desatualizado
+  // depois de uma ação do Jarvis na mesma sessão.
+  useEffect(() => { carregar() }, [carregar, versao])
 
   function calcularBarrasSemanas(lncs) {
     const semanas = Array(7).fill(0)

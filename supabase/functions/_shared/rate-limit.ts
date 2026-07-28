@@ -8,6 +8,7 @@ const LIMITES: Record<string, number> = {
   assistente: 20, // 20 mensagens/min — mais que suficiente para uso real
   tts: 30, // 30 chamadas TTS/min
   briefing: 10, // 10 briefings/min
+  anotacoes: 15, // 15 processamentos de nota/min
 }
 
 // Hash simples do IP (não armazena IP real — privacidade)

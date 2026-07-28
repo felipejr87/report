@@ -115,6 +115,12 @@ export default function JarvisHome() {
   const [sugestoes, setSugestoes] = useState([])
   const [notifAtivo, setNotifAtivo] = useState(false)
   const [notifCarregando, setNotifCarregando] = useState(false)
+  // Incrementado após toda ação de escrita confirmada (lançamento,
+  // atividade, dívida...) — PainelFinanceiro/PainelProjetos só buscam
+  // dados uma vez no mount e não sabiam que algo mudou via chat, então
+  // a aba Financeiro/Projetos ficava com dado velho até o usuário sair
+  // e voltar pra tela. Os dois painéis escutam essa versão pra recarregar.
+  const [versaoDados, setVersaoDados] = useState(0)
   const [bootDone, setBootDone] = useState(() => !!sessionStorage.getItem('jarvis_boot_done'))
   const rodapeRef = useRef(null)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -385,6 +391,7 @@ export default function JarvisHome() {
       if (vozAutomatica) falar(texto)
       await persistirConversa(novoHistorico, texto, 1)
       carregarBriefing().then(carregarSugestoes)
+      if (res.ok && data.ok) setVersaoDados((v) => v + 1)
     } catch {
       toast?.erro(t('erro_conexao_confirmar'))
     }
@@ -672,11 +679,11 @@ export default function JarvisHome() {
           {/* COLUNA DIREITA — Projetos + Financeiro */}
           <div className="hud-col hud-col--right">
             <HudPanel label="PROJETOS" className="hud-projetos-panel">
-              <PainelProjetos cliente={cliente} idioma={idioma} />
+              <PainelProjetos cliente={cliente} idioma={idioma} versao={versaoDados} />
             </HudPanel>
 
             <HudPanel className="hud-financeiro-panel">
-              <PainelFinanceiro cliente={cliente} espacoId={sessao.espaco.id} idioma={idioma} />
+              <PainelFinanceiro cliente={cliente} espacoId={sessao.espaco.id} idioma={idioma} versao={versaoDados} />
             </HudPanel>
           </div>
         </div>

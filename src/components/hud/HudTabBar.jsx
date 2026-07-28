@@ -1,4 +1,4 @@
-import { Sparkles, Compass, FolderKanban, Wallet } from 'lucide-react'
+import { Sparkles, Compass, FolderKanban, Wallet, FileText } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTexto } from '../../lib/i18n'
 
@@ -12,6 +12,7 @@ export default function HudTabBar() {
     { id: 'vida', label: t('tab_vida'), Icone: Compass, path: '/vida' },
     { id: 'projetos', label: t('tab_projetos'), Icone: FolderKanban, path: '/projetos' },
     { id: 'financeiro', label: t('tab_financeiro'), Icone: Wallet, path: '/financeiro' },
+    { id: 'notas', label: t('tab_notas'), Icone: FileText, path: '/anotacoes' },
   ]
 
   return (
@@ -21,7 +22,7 @@ export default function HudTabBar() {
         return (
           <button key={id} type="button" className={`hud-tab-btn ${ativo ? 'hud-tab-btn--ativo' : ''}`} onClick={() => navigate(path)}>
             <Icone size={20} />
-            {label}
+            <span className="hud-tab-label">{label}</span>
           </button>
         )
       })}
